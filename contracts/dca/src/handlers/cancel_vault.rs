@@ -10,55 +10,55 @@ use crate::state::triggers::delete_trigger;
 use crate::state::vaults::{get_vault, update_vault};
 use crate::types::event::{EventBuilder, EventData};
 use crate::types::trigger::TriggerConfiguration;
-use crate::types::vault::{Vault, VaultStatus};
+use crate::types::bounty::{Bounty, BountyStatus};
 use cosmwasm_std::{to_json_binary, BankMsg, DepsMut, Response, Uint128, WasmMsg};
 use cosmwasm_std::{Env, MessageInfo, SubMsg};
 use exchange::msg::ExecuteMsg;
 use shared::coin::empty_of;
 
-pub fn cancel_vault_handler(
+pub fn cancel_bounty_handler(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    vault_id: Uint128,
+    bounty_id: Uint128,
 ) -> Result<Response, ContractError> {
-    let vault = get_vault(deps.storage, vault_id)?;
+    let bounty = get_bounty(deps.storage, bounty_id)?;
 
-    assert_sender_is_admin_or_vault_owner(deps.storage, vault.owner.clone(), info.sender)?;
-    assert_vault_is_not_cancelled(&vault)?;
+    assert_sender_is_admin_or_bounty_owner(deps.storage, bounty.owner.clone(), info.sender)?;
+    assert_bounty_is_not_cancelled(&bounty)?;
 
     create_event(
         deps.storage,
-        EventBuilder::new(vault.id, env.block.clone(), EventData::DcaVaultCancelled {}),
+        EventBuilder::new(bounty.id, env.block.clone(), EventData::DcaVaultCancelled {}),
     )?;
 
-    if vault.escrowed_amount.amount > Uint128::zero() {
+    if bounty.escrowed_amount.amount > Uint128::zero() {
         save_disburse_escrow_task(
             deps.storage,
-            vault.id,
-            vault.get_expected_execution_completed_date(env.block.time),
+            bounty.id,
+            bounty.get_expected_execution_completed_date(env.block.time),
         )?;
     };
 
     let mut submessages = Vec::<SubMsg>::new();
 
-    if vault.balance.amount > Uint128::zero() {
+    if bounty.balance.amount > Uint128::zero() {
         submessages.push(SubMsg::new(BankMsg::Send {
-            to_address: vault.owner.to_string(),
-            amount: vec![vault.balance.clone()],
+            to_address: bounty.destination.to_string(),
+            amount: vec![bounty.balance.clone()],
         }));
     }
 
-    update_vault(
+    update_bounty(
         deps.storage,
-        Vault {
-            status: VaultStatus::Cancelled,
-            balance: empty_of(vault.balance.clone()),
-            ..vault.clone()
+        Bounty {
+            status: BountyStatus::Cancelled,
+            balance: empty_of(bounty.balance.clone()),
+            ..bounty.clone()
         },
     )?;
 
-    if let Some(TriggerConfiguration::Price { order_idx, .. }) = vault.trigger {
+    if let Some(TriggerConfiguration::Price { order_idx, .. }) = bounty.trigger {
         let config = get_config(deps.storage)?;
 
         submessages.push(SubMsg::reply_on_error(
@@ -99,7 +99,7 @@ pub fn cancel_vault_handler(
 }
 
 #[cfg(test)]
-mod cancel_vault_tests {
+mod cancel_bounty_tests {
     use super::*;
     use crate::constants::ONE;
     use crate::handlers::get_events_by_resource_id::get_events_by_resource_id_handler;
@@ -108,7 +108,7 @@ mod cancel_vault_tests {
     use crate::tests::helpers::{instantiate_contract, setup_vault};
     use crate::tests::mocks::{calc_mock_dependencies, ADMIN, DENOM_UKUJI};
     use crate::types::event::{EventBuilder, EventData};
-    use crate::types::vault::{Vault, VaultStatus};
+    use crate::types::bounty::{Bounty, BountyStatus};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{BankMsg, Coin, Decimal, SubMsg, Uint128};
 
@@ -120,13 +120,13 @@ mod cancel_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        let response = cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         assert!(response.messages.contains(&SubMsg::new(BankMsg::Send {
-            to_address: vault.owner.to_string(),
-            amount: vec![vault.balance],
+            to_address: bounty.owner.to_string(),
+            amount: vec![bounty.balance],
         })));
     }
 
@@ -138,120 +138,120 @@ mod cancel_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 trigger: Some(TriggerConfiguration::Price {
                     target_price: Decimal::percent(200),
                     order_idx: Uint128::new(28),
                 }),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let response = cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         assert!(response.messages.contains(&SubMsg::new(BankMsg::Send {
-            to_address: vault.owner.to_string(),
-            amount: vec![vault.balance],
+            to_address: bounty.owner.to_string(),
+            amount: vec![bounty.balance],
         })));
     }
 
     #[test]
-    fn should_publish_vault_cancelled_event() {
+    fn should_publish_bounty_cancelled_event() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info(ADMIN, &[]);
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_vault(deps.as_mut(), env.clone(), Bounty::default());
 
-        cancel_vault_handler(deps.as_mut(), env.clone(), info, vault.id).unwrap();
+        cancel_bounty_handler(deps.as_mut(), env.clone(), info, bounty.id).unwrap();
 
-        let events = get_events_by_resource_id_handler(deps.as_ref(), vault.id, None, None, None)
+        let events = get_events_by_resource_id_handler(deps.as_ref(), bounty.id, None, None, None)
             .unwrap()
             .events;
 
         assert!(events.contains(
-            &EventBuilder::new(vault.id, env.block, EventData::DcaVaultCancelled {}).build(1)
+            &EventBuilder::new(bounty.id, env.block, EventData::DcaVaultCancelled {}).build(1)
         ));
     }
 
     #[test]
-    fn when_vault_has_time_trigger_should_cancel_vault() {
+    fn when_bounty_has_time_trigger_should_cancel_bounty() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info(ADMIN, &[]);
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert_eq!(vault.status, VaultStatus::Active);
-        assert_eq!(updated_vault.status, VaultStatus::Cancelled);
+        assert_eq!(bounty.status, BountyStatus::Active);
+        assert_eq!(updated_bounty.status, BountyStatus::Cancelled);
     }
 
     #[test]
-    fn should_empty_vault_balance() {
+    fn should_empty_bounty_balance() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info(ADMIN, &[]);
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert!(vault.balance.amount.gt(&Uint128::zero()));
-        assert!(updated_vault.balance.amount.is_zero());
+        assert!(bounty.balance.amount.gt(&Uint128::zero()));
+        assert!(updated_bounty.balance.amount.is_zero());
     }
 
     #[test]
-    fn on_already_cancelled_vault_should_fail() {
+    fn on_already_cancelled_bounty_should_fail() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info(ADMIN, &[]);
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Cancelled,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Cancelled,
+                ..Bounty::default()
             },
         );
 
-        let err = cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap_err();
+        let err = cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap_err();
 
-        assert_eq!(err.to_string(), "Error: vault is already cancelled");
+        assert_eq!(err.to_string(), "Error: Bounty is already cancelled");
     }
 
     #[test]
-    fn for_vault_with_different_owner_should_fail() {
+    fn for_bounty_with_different_owner_should_fail() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info(ADMIN, &[]);
 
         instantiate_contract(deps.as_mut(), env.clone(), info);
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_vault(deps.as_mut(), env.clone(), bounty::default());
 
-        let err = cancel_vault_handler(
+        let err = cancel_bounty_handler(
             deps.as_mut(),
             env,
             mock_info("not-the-owner", &[]),
-            vault.id,
+            bounty.id,
         )
         .unwrap_err();
 
@@ -266,14 +266,14 @@ mod cancel_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert_ne!(vault.trigger, None);
-        assert_eq!(updated_vault.trigger, None);
+        assert_ne!(bounty.trigger, None);
+        assert_eq!(updated_bounty.trigger, None);
     }
 
     #[test]
