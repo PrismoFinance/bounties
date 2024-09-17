@@ -62,7 +62,7 @@ mod get_trigger_id_by_fin_limit_order_idx_handler_tests {
         save_trigger(
             deps.as_mut().storage,
             Trigger {
-                vault_id: Uint128::one(),
+                bounty_id: Uint128::one(),
                 configuration: TriggerConfiguration::Price {
                     target_price: Decimal::percent(200),
                     order_idx,
