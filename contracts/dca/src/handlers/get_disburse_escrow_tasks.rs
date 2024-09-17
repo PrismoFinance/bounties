@@ -10,5 +10,5 @@ pub fn get_disburse_escrow_tasks_handler(
 ) -> StdResult<DisburseEscrowTasksResponse> {
     let tasks = get_disburse_escrow_tasks(deps.storage, env.block.time, limit)?;
 
-    Ok(DisburseEscrowTasksResponse { vault_ids: tasks })
+    Ok(DisburseEscrowTasksResponse { bounty_ids: tasks })
 }
