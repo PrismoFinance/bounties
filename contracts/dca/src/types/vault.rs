@@ -1,6 +1,6 @@
 use super::{
-    destination::Destination, performance_assessment_strategy::PerformanceAssessmentStrategy,
-    swap_adjustment_strategy::SwapAdjustmentStrategy, time_interval::TimeInterval,
+    destination::Destination,
+     time_interval::TimeInterval,
     trigger::TriggerConfiguration,
 };
 use crate::helpers::time::get_total_execution_duration;
@@ -11,7 +11,7 @@ use cosmwasm_std::{
 use std::cmp::max;
 
 #[cw_serde]
-pub enum VaultStatus {
+pub enum BountyStatus {
     Scheduled,
     Active,
     Inactive,
@@ -19,7 +19,7 @@ pub enum VaultStatus {
 }
 
 #[cw_serde]
-pub struct Vault {
+pub struct Bounty {
     pub id: Uint128,
     pub created_at: Timestamp,
     pub started_at: Option<Timestamp>,
@@ -29,22 +29,18 @@ pub struct Vault {
     pub status: VaultStatus,
     pub balance: Coin,
     pub target_denom: String,
-    pub swap_amount: Uint128,
     pub route: Option<Binary>,
     pub slippage_tolerance: Decimal,
     pub minimum_receive_amount: Option<Uint128>,
     pub time_interval: TimeInterval,
     pub escrow_level: Decimal,
     pub deposited_amount: Coin,
-    pub swapped_amount: Coin,
     pub received_amount: Coin,
     pub escrowed_amount: Coin,
-    pub trigger: Option<TriggerConfiguration>,
-    pub performance_assessment_strategy: Option<PerformanceAssessmentStrategy>,
-    pub swap_adjustment_strategy: Option<SwapAdjustmentStrategy>,
+    pub trigger: Option<TriggerConfiguration>
 }
 
-impl Vault {
+impl Bounty {
     pub fn denoms(&self) -> [String; 2] {
         [self.get_swap_denom(), self.target_denom.clone()]
     }
@@ -99,15 +95,15 @@ impl Vault {
     }
 
     pub fn is_active(&self) -> bool {
-        self.status == VaultStatus::Active
+        self.status == BountyStatus::Active
     }
 
     pub fn is_scheduled(&self) -> bool {
-        self.status == VaultStatus::Scheduled
+        self.status == BountyStatus::Scheduled
     }
 
     pub fn is_inactive(&self) -> bool {
-        self.status == VaultStatus::Inactive
+        self.status == BountyStatus::Inactive
     }
 
     pub fn should_not_continue(&self) -> bool {
@@ -125,78 +121,71 @@ impl Vault {
     }
 }
 
-pub struct VaultBuilder {
+pub struct BountyBuilder {
+    pub id: Uint128,
     pub created_at: Timestamp,
+    pub started_at: Option<Timestamp>,
     pub owner: Addr,
     pub label: Option<String>,
     pub destinations: Vec<Destination>,
     pub status: VaultStatus,
     pub balance: Coin,
     pub target_denom: String,
-    pub swap_amount: Uint128,
     pub route: Option<Binary>,
     pub slippage_tolerance: Decimal,
     pub minimum_receive_amount: Option<Uint128>,
     pub time_interval: TimeInterval,
-    pub started_at: Option<Timestamp>,
     pub escrow_level: Decimal,
     pub deposited_amount: Coin,
-    pub swapped_amount: Coin,
     pub received_amount: Coin,
     pub escrowed_amount: Coin,
-    pub performance_assessment_strategy: Option<PerformanceAssessmentStrategy>,
-    pub swap_adjustment_strategy: Option<SwapAdjustmentStrategy>,
+    pub trigger: Option<TriggerConfiguration>
 }
 
-impl VaultBuilder {
+impl BountyBuilder {
     pub fn new(
-        created_at: Timestamp,
-        owner: Addr,
-        label: Option<String>,
-        destinations: Vec<Destination>,
-        status: VaultStatus,
-        balance: Coin,
-        target_denom: String,
-        swap_amount: Uint128,
-        route: Option<Binary>,
-        slippage_tolerance: Decimal,
-        minimum_receive_amount: Option<Uint128>,
-        time_interval: TimeInterval,
-        started_at: Option<Timestamp>,
-        escrow_level: Decimal,
-        deposited_amount: Coin,
-        swapped_amount: Coin,
-        received_amount: Coin,
-        escrowed_amount: Coin,
-        performance_assessment_strategy: Option<PerformanceAssessmentStrategy>,
-        swap_adjustment_strategy: Option<SwapAdjustmentStrategy>,
-    ) -> VaultBuilder {
-        VaultBuilder {
+    id: Uint128,
+    created_at: Timestamp,
+    started_at: Option<Timestamp>,
+    owner: Addr,
+    label: Option<String>,
+    destinations: Vec<Destination>,
+    status: BountyStatus,
+    balance: Coin,
+    target_denom: String,
+    route: Option<Binary>,
+    slippage_tolerance: Decimal,
+    minimum_receive_amount: Option<Uint128>,
+    time_interval: TimeInterval,
+    escrow_level: Decimal,
+    deposited_amount: Coin,
+    received_amount: Coin,
+    escrowed_amount: Coin,
+    trigger: Option<TriggerConfiguration>
+    ) -> BountyBuilder {
+        BountyBuilder {
+            id,
             created_at,
+            started_at, 
             owner,
             label,
             destinations,
             status,
             balance,
             target_denom,
-            swap_amount,
             route,
             slippage_tolerance,
             minimum_receive_amount,
             time_interval,
-            started_at,
             escrow_level,
             deposited_amount,
-            swapped_amount,
             received_amount,
             escrowed_amount,
-            performance_assessment_strategy,
-            swap_adjustment_strategy,
         }
     }
 
-    pub fn build(self, id: Uint128) -> Vault {
-        Vault {
+    pub fn build(self, id: Uint128) -> Bounty {
+        Bounty {
             id,
             created_at: self.created_at,
             started_at: self.started_at,
@@ -206,18 +195,14 @@ impl VaultBuilder {
             status: self.status,
             balance: self.balance.clone(),
             target_denom: self.target_denom,
-            swap_amount: self.swap_amount,
             route: self.route,
             slippage_tolerance: self.slippage_tolerance,
             minimum_receive_amount: self.minimum_receive_amount,
             time_interval: self.time_interval,
             escrow_level: self.escrow_level,
             deposited_amount: self.deposited_amount,
-            swapped_amount: self.swapped_amount,
             received_amount: self.received_amount,
             escrowed_amount: self.escrowed_amount,
-            performance_assessment_strategy: self.performance_assessment_strategy,
-            swap_adjustment_strategy: self.swap_adjustment_strategy,
             trigger: None,
         }
     }
