@@ -284,20 +284,20 @@ mod cancel_bounty_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 escrowed_amount: Coin::new(ONE.into(), DENOM_UKUJI.to_string()),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        cancel_vault_handler(deps.as_mut(), env.clone(), info, vault.id).unwrap();
+        cancel_bounty_handler(deps.as_mut(), env.clone(), info, bounty.id).unwrap();
 
         let disburse_escrow_tasks_before = get_disburse_escrow_tasks(
             deps.as_ref().storage,
-            vault
+            bounty
                 .get_expected_execution_completed_date(env.block.time)
                 .minus_seconds(10),
             Some(100),
@@ -308,14 +308,14 @@ mod cancel_bounty_tests {
 
         let disburse_escrow_tasks_after = get_disburse_escrow_tasks(
             deps.as_ref().storage,
-            vault
+            bounty
                 .get_expected_execution_completed_date(env.block.time)
                 .plus_seconds(10),
             Some(100),
         )
         .unwrap();
 
-        assert!(disburse_escrow_tasks_after.contains(&vault.id));
+        assert!(disburse_escrow_tasks_after.contains(&bounty.id));
     }
 
     #[test]
@@ -328,19 +328,19 @@ mod cancel_bounty_tests {
 
         let order_idx = Uint128::new(123);
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 trigger: Some(TriggerConfiguration::Price {
                     target_price: Decimal::percent(200),
                     order_idx,
                 }),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let response = cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         let config = get_config(deps.as_ref().storage).unwrap();
 
@@ -371,19 +371,19 @@ mod cancel_bounty_tests {
 
         let order_idx = Uint128::new(123);
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 trigger: Some(TriggerConfiguration::Price {
                     target_price: Decimal::percent(200),
                     order_idx,
                 }),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let response = cancel_vault_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = cancel_bounty_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         let config = get_config(deps.as_ref().storage).unwrap();
 
