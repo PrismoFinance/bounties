@@ -38,7 +38,7 @@ pub enum ExecuteMsg {
     CreateVault {
         owner: Option<Addr>,
         label: Option<String>,
-        destinations: Option<Vec<Destination>>,
+        destinations: Option<Vec<Destination>>, // Destination is in types and consists of allocation, address, and msg. 
         target_denom: String,
         route: Option<Binary>,
         slippage_tolerance: Option<Decimal>,
@@ -47,12 +47,10 @@ pub enum ExecuteMsg {
         time_interval: TimeInterval,
         target_start_time_utc_seconds: Option<Uint64>,
         target_receive_amount: Option<Uint128>,
-        performance_assessment_strategy: Option<PerformanceAssessmentStrategyParams>,
-        swap_adjustment_strategy: Option<SwapAdjustmentStrategyParams>,
     },
     Deposit {
         address: Addr,
-        vault_id: Uint128,
+        bounty_id: Uint128,
     },
     UpdateVault {
         vault_id: Uint128,
