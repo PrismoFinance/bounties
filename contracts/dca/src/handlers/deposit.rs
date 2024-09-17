@@ -28,37 +28,37 @@ pub fn deposit_handler(
     deps.api.addr_validate(address.as_str())?;
     assert_exactly_one_asset(info.funds.clone())?;
 
-    let vault = get_vault(deps.storage, vault_id)?;
+    let bounty = get_bounty(deps.storage, bounty_id)?;
 
-    if address != vault.owner {
+    if address != bounty.owner {
         return Err(ContractError::CustomError {
             val: format!(
-                "provided an incorrect owner address for vault id {}",
-                vault_id
+                "provided an incorrect owner address for bounty id {}",
+                bounty_id
             ),
         });
     }
 
-    assert_vault_is_not_cancelled(&vault)?;
+    assert_bounty_is_not_cancelled(&bounty)?;
     assert_deposited_denom_matches_send_denom(
         info.funds[0].denom.clone(),
-        vault.balance.denom.clone(),
+        bounty.balance.denom.clone(),
     )?;
 
-    let vault_was_inactive = vault.is_inactive();
-    let new_balance = add(vault.balance.clone(), info.funds[0].clone())?;
+    let bounty_was_inactive = bounty.is_inactive();
+    let new_balance = add(bounty.balance.clone(), info.funds[0].clone())?;
 
-    let vault = update_vault(
+    let bounty = update_bounty(
         deps.storage,
-        Vault {
+        Bounty {
             balance: new_balance.clone(),
-            deposited_amount: add(vault.deposited_amount.clone(), info.funds[0].clone())?,
-            status: if vault.is_inactive() {
-                VaultStatus::Active
+            deposited_amount: add(bounty.deposited_amount.clone(), info.funds[0].clone())?,
+            status: if bounty.is_inactive() {
+                BountyStatus::Active
             } else {
-                vault.status
+                bounty.status
             },
-            swap_adjustment_strategy: vault.swap_adjustment_strategy.clone().map(
+            swap_adjustment_strategy: bounty.swap_adjustment_strategy.clone().map(
                 |swap_adjustment_strategy| match swap_adjustment_strategy {
                     SwapAdjustmentStrategy::RiskWeightedAverage {
                         base_denom,
@@ -68,8 +68,8 @@ pub fn deposit_handler(
                         model_id: get_risk_weighted_average_model_id(
                             &env.block.time,
                             &new_balance,
-                            &vault.swap_amount,
-                            &vault.time_interval,
+                            &bounty.swap_amount,
+                            &bounty.time_interval,
                         ),
                         base_denom,
                         position_type,
@@ -77,14 +77,14 @@ pub fn deposit_handler(
                     _ => swap_adjustment_strategy,
                 },
             ),
-            ..vault
+            ..bounty
         },
     )?;
 
     create_event(
         deps.storage,
         EventBuilder::new(
-            vault.id,
+            bounty.id,
             env.block.clone(),
             EventData::DcaVaultFundsDeposited {
                 amount: info.funds[0].clone(),
@@ -92,16 +92,16 @@ pub fn deposit_handler(
         ),
     )?;
 
-    if vault.is_active() && vault_was_inactive && vault.trigger.is_none() {
+    if bounty.is_active() && bounty_was_inactive && bounty.trigger.is_none() {
         save_trigger(
             deps.storage,
             Trigger {
-                vault_id,
+                bounty_id,
                 configuration: TriggerConfiguration::Time {
                     target_time: get_next_target_time(
                         env.block.time,
-                        vault.started_at.unwrap_or(env.block.time),
-                        vault.time_interval,
+                        bounty.started_at.unwrap_or(env.block.time),
+                        bounty.time_interval,
                     ),
                 },
             },
@@ -110,8 +110,8 @@ pub fn deposit_handler(
 
     Ok(Response::new()
         .add_attribute("deposit", "true")
-        .add_attribute("vault_id", vault.id)
-        .add_attribute("owner", vault.owner)
+        .add_attribute("bounty_id", bounty.id)
+        .add_attribute("owner", bounty.owner)
         .add_attribute("deposited_amount", info.funds[0].amount))
 }
 
@@ -128,13 +128,13 @@ mod deposit_tests {
     use crate::types::event::{EventBuilder, EventData};
     use crate::types::position_type::PositionType;
     use crate::types::swap_adjustment_strategy::{BaseDenom, SwapAdjustmentStrategy};
-    use crate::types::vault::{Vault, VaultStatus};
+    use crate::types::bounty::{Bounty, BountyStatus};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{Addr, Coin};
     use shared::coin::subtract;
 
     #[test]
-    fn updates_the_vault_balance() {
+    fn updates_the_bounty_balance() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -142,24 +142,24 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 balance: Coin::new(0, DENOM_UKUJI),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
         assert_eq!(
-            vault.balance,
+            bounty.balance,
             subtract(&deposit_amount, &deposit_amount).unwrap()
         );
-        assert_eq!(updated_vault.balance, deposit_amount);
+        assert_eq!(updated_bounty.balance, deposit_amount);
     }
 
     #[test]
@@ -171,17 +171,17 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        deposit_handler(deps.as_mut(), env.clone(), info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env.clone(), info, bounty.owner, bounty.id).unwrap();
 
-        let events = get_events_by_resource_id_handler(deps.as_ref(), vault.id, None, None, None)
+        let events = get_events_by_resource_id_handler(deps.as_ref(), bounty.id, None, None, None)
             .unwrap()
             .events;
 
         assert!(events.contains(
             &EventBuilder::new(
-                vault.id,
+                bounty.id,
                 env.block,
                 EventData::DcaVaultFundsDeposited {
                     amount: deposit_amount,
@@ -192,7 +192,7 @@ mod deposit_tests {
     }
 
     #[test]
-    fn updates_inactive_vault_to_active() {
+    fn updates_inactive_bounty_to_active() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -200,25 +200,25 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Inactive,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Inactive,
+                ..Bounty::default()
             },
         );
 
-        deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert_eq!(vault.status, VaultStatus::Inactive);
-        assert_eq!(updated_vault.status, VaultStatus::Active);
+        assert_eq!(bounty.status, BountyStatus::Inactive);
+        assert_eq!(updated_bounty.status, BountyStatus::Active);
     }
 
     #[test]
-    fn leaves_scheduled_vault_scheduled() {
+    fn leaves_scheduled_bounty_scheduled() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -226,25 +226,25 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Scheduled,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Scheduled,
+                ..Bounty::default()
             },
         );
 
-        deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert_eq!(vault.status, VaultStatus::Scheduled);
-        assert_eq!(updated_vault.status, VaultStatus::Scheduled);
+        assert_eq!(bounty.status, BountyStatus::Scheduled);
+        assert_eq!(updated_bounty.status, BountyStatus::Scheduled);
     }
 
     #[test]
-    fn leaves_active_vault_active() {
+    fn leaves_active_bounty_active() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -252,18 +252,18 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert_eq!(vault.status, VaultStatus::Active);
-        assert_eq!(updated_vault.status, VaultStatus::Active);
+        assert_eq!(bounty.status, BountyStatus::Active);
+        assert_eq!(updated_bounty.status, BountyStatus::Active);
     }
 
     #[test]
-    fn does_not_execute_trigger_for_active_vault() {
+    fn does_not_execute_trigger_for_active_bounty() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -271,16 +271,16 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
         let response =
-            deposit_handler(deps.as_mut(), env, info, Addr::unchecked(USER), vault.id).unwrap();
+            deposit_handler(deps.as_mut(), env, info, Addr::unchecked(USER), bounty.id).unwrap();
 
         assert!(response.messages.is_empty())
     }
 
     #[test]
-    fn does_not_execute_trigger_for_scheduled_vault() {
+    fn does_not_execute_trigger_for_scheduled_bounty() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -288,23 +288,23 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Scheduled,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Scheduled,
+                ..Bounty::default()
             },
         );
 
         let response =
-            deposit_handler(deps.as_mut(), env, info, Addr::unchecked(USER), vault.id).unwrap();
+            deposit_handler(deps.as_mut(), env, info, Addr::unchecked(USER), bounty.id).unwrap();
 
         assert!(response.messages.is_empty())
     }
 
     #[test]
-    fn for_cancelled_vault_should_fail() {
+    fn for_cancelled_bounty_should_fail() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let deposit_amount = Coin::new(TEN.into(), DENOM_UKUJI);
@@ -312,18 +312,18 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Cancelled,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Cancelled,
+                ..Bounty::default()
             },
         );
 
-        let err = deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap_err();
+        let err = deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap_err();
 
-        assert_eq!(err.to_string(), "Error: vault is already cancelled");
+        assert_eq!(err.to_string(), "Error: bounty is already cancelled");
     }
 
     #[test]
@@ -335,12 +335,12 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Cancelled,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Cancelled,
+                ..Bounty::default()
             },
         );
 
@@ -349,13 +349,13 @@ mod deposit_tests {
             env,
             info,
             Addr::unchecked("not-the-owner"),
-            vault.id,
+            bounty.id,
         )
         .unwrap_err();
 
         assert_eq!(
             err.to_string(),
-            "Error: provided an incorrect owner address for vault id 0"
+            "Error: provided an incorrect owner address for bounty id 0"
         );
     }
 
@@ -368,17 +368,17 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info);
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
         let err = deposit_handler(
             deps.as_mut(),
             env,
             mock_info(
                 USER,
-                &[Coin::new(ONE.into(), vault.received_amount.denom.clone())],
+                &[Coin::new(ONE.into(), bounty.received_amount.denom.clone())],
             ),
-            vault.owner.clone(),
-            vault.id,
+            bounty.owner.clone(),
+            bounty.id,
         )
         .unwrap_err();
 
@@ -386,8 +386,8 @@ mod deposit_tests {
             err.to_string(),
             format!(
                 "Error: received asset with denom {}, but needed {}",
-                vault.target_denom,
-                vault.get_swap_denom()
+                bounty.target_denom,
+                bounty.get_swap_denom()
             )
         );
     }
@@ -401,9 +401,9 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        let err = deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap_err();
+        let err = deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap_err();
 
         assert_eq!(
             err.to_string(),
@@ -431,9 +431,9 @@ mod deposit_tests {
         )
         .unwrap();
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        let err = deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap_err();
+        let err = deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap_err();
 
         assert_eq!(err.to_string(), "Error: contract is paused");
     }
@@ -447,25 +447,25 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::RiskWeightedAverage {
                     model_id: 30,
                     base_denom: BaseDenom::Bitcoin,
                     position_type: PositionType::Enter,
                 }),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
         assert_eq!(
-            vault
+            bounty
                 .swap_adjustment_strategy
                 .map(|strategy| match strategy {
                     SwapAdjustmentStrategy::RiskWeightedAverage { model_id, .. } => model_id,
@@ -474,7 +474,7 @@ mod deposit_tests {
             Some(30)
         );
         assert_eq!(
-            updated_vault
+            updated_bounty
                 .swap_adjustment_strategy
                 .map(|strategy| match strategy {
                     SwapAdjustmentStrategy::RiskWeightedAverage { model_id, .. } => model_id,
@@ -493,16 +493,16 @@ mod deposit_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(deps.as_mut(), env.clone(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
-        deposit_handler(deps.as_mut(), env, info, vault.owner, vault.id).unwrap();
+        deposit_handler(deps.as_mut(), env, info, bounty.owner, bounty.id).unwrap();
 
-        let updated_vault = get_vault_handler(deps.as_ref(), vault.id).unwrap().vault;
+        let updated_bounty = get_bounty_handler(deps.as_ref(), bounty.id).unwrap().bounty;
 
-        assert_eq!(vault.deposited_amount, vault.balance);
+        assert_eq!(bounty.deposited_amount, bounty.balance);
         assert_eq!(
-            updated_vault.deposited_amount,
-            add(vault.balance, deposit_amount).unwrap()
+            updated_bounty.deposited_amount,
+            add(bounty.balance, deposit_amount).unwrap()
         );
     }
 }
