@@ -5,4 +5,4 @@ pub mod events;
 pub mod state_helpers;
 pub mod swap_adjustments;
 pub mod triggers;
-pub mod vaults;
+pub mod bounties;
