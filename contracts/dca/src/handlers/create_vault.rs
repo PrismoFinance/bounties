@@ -29,12 +29,13 @@ use crate::types::swap_adjustment_strategy::{
 };
 use crate::types::time_interval::TimeInterval;
 use crate::types::trigger::{Trigger, TriggerConfiguration};
-use crate::types::vault::{Vault, VaultBuilder, VaultStatus};
+use crate::types::bounty::{Bounty, BountyBuilder, BountyStatus};
 use cosmwasm_std::{to_json_binary, Addr, Binary, Coin, Decimal, Reply, SubMsg, WasmMsg};
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Timestamp, Uint128, Uint64};
 use exchange::msg::ExecuteMsg as ExchangeExecuteMsg;
 
-pub fn create_vault_handler(
+pub fn create_bounty_handler(
+    // Edit
     deps: DepsMut,
     env: Env,
     info: &MessageInfo,
@@ -45,12 +46,9 @@ pub fn create_vault_handler(
     route: Option<Binary>,
     slippage_tolerance: Option<Decimal>,
     minimum_receive_amount: Option<Uint128>,
-    swap_amount: Uint128,
     time_interval: TimeInterval,
     target_start_time_utc_seconds: Option<Uint64>,
     target_receive_amount: Option<Uint128>,
-    performance_assessment_strategy_params: Option<PerformanceAssessmentStrategyParams>,
-    swap_adjustment_strategy_params: Option<SwapAdjustmentStrategyParams>,
 ) -> Result<Response, ContractError> {
     assert_contract_is_not_paused(deps.storage)?;
     assert_address_is_valid(deps.as_ref(), &owner, "owner")?;
@@ -153,14 +151,13 @@ pub fn create_vault_handler(
             config.risk_weighted_average_escrow_level
         });
 
-    let vault_builder = VaultBuilder {
+    let bounty_builder = BountyBuilder {
         owner,
         label,
         destinations,
         created_at: env.block.time,
-        status: VaultStatus::Scheduled,
+        status: BountyStatus::Scheduled,
         target_denom: target_denom.clone(),
-        swap_amount,
         route,
         slippage_tolerance: slippage_tolerance.unwrap_or(config.default_slippage_tolerance),
         minimum_receive_amount,
@@ -169,21 +166,18 @@ pub fn create_vault_handler(
         started_at: None,
         escrow_level,
         deposited_amount: info.funds[0].clone(),
-        swapped_amount: Coin::new(0, swap_denom),
         received_amount: Coin::new(0, target_denom.clone()),
         escrowed_amount: Coin::new(0, target_denom),
-        swap_adjustment_strategy,
-        performance_assessment_strategy,
     };
 
-    let vault = save_vault(deps.storage, vault_builder)?;
+    let bounty = save_bounty(deps.storage, bounty_builder)?;
 
-    VAULT_ID_CACHE.save(deps.storage, &vault.id)?;
+    BOUNTY_ID_CACHE.save(deps.storage, &bounty.id)?;
 
     create_event(
         deps.storage,
         EventBuilder::new(
-            vault.id,
+            bounty.id,
             env.block.clone(),
             EventData::DcaVaultFundsDeposited {
                 amount: Coin::new(
@@ -201,17 +195,17 @@ pub fn create_vault_handler(
     )?;
 
     let mut response = Response::new()
-        .add_attribute("create_vault", "true")
-        .add_attribute("vault_id", vault.id)
-        .add_attribute("owner", vault.owner.clone())
-        .add_attribute("deposited_amount", vault.balance.to_string());
+        .add_attribute("create_bounty", "true")
+        .add_attribute("bounty_id", bounty.id)
+        .add_attribute("owner", bounty.owner.clone())
+        .add_attribute("deposited_amount", bounty.balance.to_string());
 
     match (target_start_time_utc_seconds, target_receive_amount) {
         (None, None) | (Some(_), None) => {
             save_trigger(
                 deps.storage,
                 Trigger {
-                    vault_id: vault.id,
+                    bounty_id: bounty.id,
                     configuration: TriggerConfiguration::Time {
                         target_time: match target_start_time_utc_seconds {
                             Some(time) => Timestamp::from_seconds(time.u64()),
@@ -225,8 +219,8 @@ pub fn create_vault_handler(
                 response = response.add_submessage(SubMsg::new(WasmMsg::Execute {
                     contract_addr: env.contract.address.to_string(),
                     msg: to_json_binary(&ExecuteMsg::ExecuteTrigger {
-                        trigger_id: vault.id,
-                        route: vault.route,
+                        trigger_id: bounty.id,
+                        route: bounty.route,
                     })
                     .unwrap(),
                     funds: vec![],
@@ -236,18 +230,18 @@ pub fn create_vault_handler(
             Ok(response)
         }
         (None, Some(target_receive_amount)) => {
-            let vault = update_vault(
+            let bounty= update_bounty(
                 deps.storage,
-                Vault {
+                Bounty {
                     deposited_amount: Coin::new(
-                        (vault.deposited_amount.amount - TWO_MICRONS).into(),
-                        vault.deposited_amount.denom,
+                        (bounty.deposited_amount.amount - TWO_MICRONS).into(),
+                        bounty.deposited_amount.denom,
                     ),
                     balance: Coin::new(
-                        (vault.balance.amount - TWO_MICRONS).into(),
-                        vault.balance.denom,
+                        (bounty.balance.amount - TWO_MICRONS).into(),
+                        bounty.balance.denom,
                     ),
-                    ..vault
+                    ..bounty
                 },
             )?;
 
@@ -258,10 +252,10 @@ pub fn create_vault_handler(
                     contract_addr: config.exchange_contract_address.to_string(),
                     msg: to_json_binary(&ExchangeExecuteMsg::SubmitOrder {
                         target_price: target_price.into(),
-                        target_denom: vault.target_denom.clone(),
+                        target_denom: bounty.target_denom.clone(),
                     })
                     .unwrap(),
-                    funds: vec![Coin::new(TWO_MICRONS.into(), vault.get_swap_denom())],
+                    funds: vec![Coin::new(TWO_MICRONS.into(), bounty.get_swap_denom())],
                 },
                 AFTER_LIMIT_ORDER_PLACED_REPLY_ID,
             )))
@@ -286,7 +280,7 @@ pub fn save_price_trigger(deps: DepsMut, reply: Reply) -> Result<Response, Contr
             .parse::<Decimal>()
             .expect("the target price of the submitted order");
 
-    let vault_id = VAULT_ID_CACHE.load(deps.storage)?;
+    let bounty_id = BOUNTY_ID_CACHE.load(deps.storage)?;
 
     save_trigger(
         deps.storage,
@@ -305,7 +299,7 @@ pub fn save_price_trigger(deps: DepsMut, reply: Reply) -> Result<Response, Contr
 }
 
 #[cfg(test)]
-mod create_vault_tests {
+mod create_bounty_tests {
     use super::*;
     use crate::constants::{ONE, TEN};
     use crate::handlers::get_events_by_resource_id::get_events_by_resource_id_handler;
@@ -338,7 +332,7 @@ mod create_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -375,7 +369,7 @@ mod create_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -415,7 +409,7 @@ mod create_vault_tests {
             ))
         });
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -454,7 +448,7 @@ mod create_vault_tests {
 
         let user_info = mock_info(USER, &[Coin::new(10000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &user_info,
@@ -494,7 +488,7 @@ mod create_vault_tests {
 
         let user_info = mock_info(USER, &[Coin::new(10000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &user_info,
@@ -539,7 +533,7 @@ mod create_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -581,7 +575,7 @@ mod create_vault_tests {
 
         let user_info = mock_info(USER, &[Coin::new(10000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &user_info,
@@ -630,7 +624,7 @@ mod create_vault_tests {
         )
         .unwrap();
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -663,7 +657,7 @@ mod create_vault_tests {
 
         let user_info = mock_info(USER, &[Coin::new(10000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &user_info,
@@ -697,7 +691,7 @@ mod create_vault_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -733,7 +727,7 @@ mod create_vault_tests {
 
         let pair = Pair::default();
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &mock_info(ADMIN, &[Coin::new(1233123, pair.denoms[0].clone())]),
@@ -770,7 +764,7 @@ mod create_vault_tests {
         let swap_amount = Uint128::new(100000);
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -807,7 +801,7 @@ mod create_vault_tests {
         let swap_amount = Uint128::new(100000);
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -844,7 +838,7 @@ mod create_vault_tests {
         let swap_amount = Uint128::new(100000);
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -885,7 +879,7 @@ mod create_vault_tests {
         let swap_amount = Uint128::new(100000);
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -922,7 +916,7 @@ mod create_vault_tests {
         let swap_amount = Uint128::new(100000);
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -942,22 +936,22 @@ mod create_vault_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
         let config = get_config(deps.as_ref().storage).unwrap();
 
         assert_eq!(
-            vault,
-            Vault {
+            bounty,
+            Bounty {
                 minimum_receive_amount: None,
                 label: None,
                 id: Uint128::new(1),
                 owner: info.sender,
                 destinations: vec![Destination::default()],
                 created_at: env.block.time,
-                status: VaultStatus::Scheduled,
+                status: BountyStatus::Scheduled,
                 time_interval: TimeInterval::Daily,
                 balance: info.funds[0].clone(),
                 slippage_tolerance: config.default_slippage_tolerance,
@@ -980,7 +974,7 @@ mod create_vault_tests {
     }
 
     #[test]
-    fn should_create_vault_with_pending_price_trigger() {
+    fn should_create_bounty_with_pending_price_trigger() {
         let mut deps = calc_mock_dependencies();
         let env = mock_env();
         let mut info = mock_info(ADMIN, &[]);
@@ -990,7 +984,7 @@ mod create_vault_tests {
         let swap_amount = ONE;
         info = mock_info(USER, &[Coin::new(TEN.into(), DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1010,22 +1004,22 @@ mod create_vault_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
         let config = get_config(deps.as_ref().storage).unwrap();
 
         assert_eq!(
-            vault,
-            Vault {
+            bounty,
+            Bounty {
                 minimum_receive_amount: None,
                 label: None,
                 id: Uint128::new(1),
                 owner: info.sender,
                 destinations: vec![Destination::default()],
                 created_at: env.block.time,
-                status: VaultStatus::Scheduled,
+                status: BountyStatus::Scheduled,
                 time_interval: TimeInterval::Daily,
                 balance: Coin::new(
                     (info.funds[0].amount - TWO_MICRONS).into(),
@@ -1061,7 +1055,7 @@ mod create_vault_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1109,7 +1103,7 @@ mod create_vault_tests {
         let owner = Addr::unchecked(USER);
         info = mock_info(ADMIN, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1129,11 +1123,11 @@ mod create_vault_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
-        assert_eq!(vault.owner, Addr::unchecked(USER));
+        assert_eq!(bounty.owner, Addr::unchecked(USER));
     }
 
     #[test]
