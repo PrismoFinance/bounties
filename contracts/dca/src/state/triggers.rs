@@ -28,7 +28,7 @@ pub(crate) fn trigger_store<'a>() -> IndexedMap<'a, u128, Trigger, TriggerIndexe
         order_idx: UniqueIndex::new(
             |trigger| match trigger.configuration {
                 TriggerConfiguration::Price { order_idx, .. } => order_idx.into(),
-                _ => u128::MAX - trigger.vault_id.u128(), // allows a unique entry that will never be found via an order_idx
+                _ => u128::MAX - trigger.bounty_id.u128(), // allows a unique entry that will never be found via an order_idx
             },
             "triggers_v8__order_idx",
         ),
@@ -37,15 +37,15 @@ pub(crate) fn trigger_store<'a>() -> IndexedMap<'a, u128, Trigger, TriggerIndexe
 }
 
 pub fn save_trigger(store: &mut dyn Storage, trigger: Trigger) -> StdResult<()> {
-    trigger_store().save(store, trigger.vault_id.into(), &trigger)
+    trigger_store().save(store, trigger.bounty_id.into(), &trigger)
 }
 
-pub fn get_trigger(store: &dyn Storage, vault_id: Uint128) -> StdResult<Option<Trigger>> {
-    trigger_store().may_load(store, vault_id.into())
+pub fn get_trigger(store: &dyn Storage, bounty_id: Uint128) -> StdResult<Option<Trigger>> {
+    trigger_store().may_load(store, bounty_id.into())
 }
 
-pub fn delete_trigger(store: &mut dyn Storage, vault_id: Uint128) -> StdResult<()> {
-    trigger_store().remove(store, vault_id.into())
+pub fn delete_trigger(store: &mut dyn Storage, bounty_id: Uint128) -> StdResult<()> {
+    trigger_store().remove(store, bounty_id.into())
 }
 
 pub fn get_time_triggers(
@@ -66,7 +66,7 @@ pub fn get_time_triggers(
             Order::Ascending,
         )
         .take(limit.unwrap_or(30) as usize)
-        .flat_map(|result| result.map(|(_, trigger)| trigger.vault_id))
+        .flat_map(|result| result.map(|(_, trigger)| trigger.bounty_id))
         .collect::<Vec<Uint128>>())
 }
 
@@ -94,7 +94,7 @@ mod tests {
         let env = mock_env();
 
         let trigger = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
@@ -105,7 +105,7 @@ mod tests {
         let trigger_ids =
             get_time_triggers(&deps.storage, env.block.time.plus_seconds(10), Some(100)).unwrap();
 
-        assert_eq!(trigger_ids, vec![trigger.vault_id]);
+        assert_eq!(trigger_ids, vec![trigger.bounty_id]);
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod tests {
         let env = mock_env();
 
         let trigger = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time.plus_seconds(10),
             },
@@ -133,13 +133,13 @@ mod tests {
         let env = mock_env();
 
         let trigger_1 = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
         };
         let trigger_2 = Trigger {
-            vault_id: Uint128::from(2u128),
+            bounty_id: Uint128::from(2u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
@@ -150,16 +150,16 @@ mod tests {
 
         let trigger_ids = get_time_triggers(&deps.storage, env.block.time, Some(100)).unwrap();
 
-        assert_eq!(trigger_ids, vec![trigger_1.vault_id, trigger_2.vault_id]);
+        assert_eq!(trigger_ids, vec![trigger_1.bounty_id, trigger_2.bounty_id]);
     }
 
     #[test]
-    fn deletes_trigger_by_vault_id() {
+    fn deletes_trigger_by_bounty_id() {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
         let trigger = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
@@ -170,12 +170,12 @@ mod tests {
         let trigger_ids_before_delete =
             get_time_triggers(&deps.storage, env.block.time, Some(100)).unwrap();
 
-        delete_trigger(&mut deps.storage, trigger.vault_id).unwrap();
+        delete_trigger(&mut deps.storage, trigger.bounty_id).unwrap();
 
         let trigger_ids_after_delete =
             get_time_triggers(&deps.storage, env.block.time, Some(100)).unwrap();
 
-        assert_eq!(trigger_ids_before_delete, vec![trigger.vault_id]);
+        assert_eq!(trigger_ids_before_delete, vec![trigger.bounty_id]);
         assert!(trigger_ids_after_delete.is_empty());
     }
 
@@ -185,14 +185,14 @@ mod tests {
         let env = mock_env();
 
         let trigger_1 = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
         };
 
         let trigger_2 = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time.plus_seconds(10),
             },
@@ -201,28 +201,28 @@ mod tests {
         save_trigger(&mut deps.storage, trigger_1.clone()).unwrap();
 
         let trigger_ids = get_time_triggers(&deps.storage, env.block.time, Some(100)).unwrap();
-        assert_eq!(trigger_ids, vec![trigger_1.vault_id]);
+        assert_eq!(trigger_ids, vec![trigger_1.bounty_id]);
 
         save_trigger(&mut deps.storage, trigger_2.clone()).unwrap();
 
         let trigger_ids =
             get_time_triggers(&deps.storage, env.block.time.plus_seconds(20), Some(100)).unwrap();
-        assert_eq!(trigger_ids, vec![trigger_2.vault_id]);
+        assert_eq!(trigger_ids, vec![trigger_2.bounty_id]);
     }
 
     #[test]
-    fn keeps_other_triggers_when_deleting_trigger_by_vault_id() {
+    fn keeps_other_triggers_when_deleting_trigger_by_bounty_id() {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
         let trigger_1 = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
         };
         let trigger_2 = Trigger {
-            vault_id: Uint128::from(2u128),
+            bounty_id: Uint128::from(2u128),
             configuration: TriggerConfiguration::Time {
                 target_time: env.block.time,
             },
@@ -234,16 +234,16 @@ mod tests {
         let trigger_ids_before_delete =
             get_time_triggers(&deps.storage, env.block.time, Some(100)).unwrap();
 
-        delete_trigger(&mut deps.storage, trigger_1.vault_id).unwrap();
+        delete_trigger(&mut deps.storage, trigger_1.bounty_id).unwrap();
 
         let trigger_ids_after_delete =
             get_time_triggers(&deps.storage, env.block.time, Some(100)).unwrap();
 
         assert_eq!(
             trigger_ids_before_delete,
-            vec![trigger_1.vault_id, trigger_2.vault_id]
+            vec![trigger_1.vault_id, trigger_2.bounty_id]
         );
-        assert_eq!(trigger_ids_after_delete, vec![trigger_2.vault_id]);
+        assert_eq!(trigger_ids_after_delete, vec![trigger_2.bounty_id]);
     }
 
     #[test]
@@ -253,7 +253,7 @@ mod tests {
         let order_idx = Uint128::new(17);
 
         let trigger = Trigger {
-            vault_id: Uint128::from(1u128),
+            bounty_id: Uint128::from(1u128),
             configuration: TriggerConfiguration::Price {
                 target_price: Decimal::percent(120),
                 order_idx,
