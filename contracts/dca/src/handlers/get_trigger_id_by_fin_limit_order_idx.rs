@@ -11,7 +11,7 @@ pub fn get_trigger_id_by_fin_limit_order_idx_handler(
         .idx
         .order_idx
         .item(deps.storage, order_idx.into())?
-        .map(|(_, trigger)| trigger.vault_id);
+        .map(|(_, trigger)| trigger.bounty_id);
 
     if let Some(trigger_id) = trigger_id {
         Ok(TriggerIdResponse { trigger_id })
@@ -38,7 +38,7 @@ mod get_trigger_id_by_fin_limit_order_idx_handler_tests {
         save_trigger(
             deps.as_mut().storage,
             Trigger {
-                vault_id: Uint128::one(),
+                bounty_id: Uint128::one(),
                 configuration: TriggerConfiguration::Price {
                     target_price: Decimal::percent(200),
                     order_idx,
