@@ -29,22 +29,22 @@ fn disburse_escrow_task_store<'a>(
 
 pub fn save_disburse_escrow_task(
     store: &mut dyn Storage,
-    vault_id: Uint128,
+    bounty_id: Uint128,
     due_date: Timestamp,
 ) -> StdResult<()> {
     disburse_escrow_task_store().save(
         store,
-        vault_id.into(),
-        &(due_date.seconds(), vault_id.into()),
+        bounty_id.into(),
+        &(due_date.seconds(), bounty_id.into()),
     )
 }
 
 pub fn get_disburse_escrow_task_due_date(
     store: &dyn Storage,
-    vault_id: Uint128,
+    bounty_id: Uint128,
 ) -> StdResult<Option<Timestamp>> {
     disburse_escrow_task_store()
-        .may_load(store, vault_id.into())
+        .may_load(store, bounty_id.into())
         .map(|result| result.map(|(seconds, _)| Timestamp::from_seconds(seconds)))
 }
 
@@ -66,12 +66,12 @@ pub fn get_disburse_escrow_tasks(
             Order::Ascending,
         )
         .take(limit.unwrap_or_else(|| get_config(store).unwrap().default_page_limit) as usize)
-        .flat_map(|result| result.map(|(_, (_, vault_id))| vault_id.into()))
+        .flat_map(|result| result.map(|(_, (_, bounty_id))| bounty_id.into()))
         .collect::<Vec<Uint128>>())
 }
 
-pub fn delete_disburse_escrow_task(store: &mut dyn Storage, vault_id: Uint128) -> StdResult<()> {
-    disburse_escrow_task_store().remove(store, vault_id.into())
+pub fn delete_disburse_escrow_task(store: &mut dyn Storage, bounty_id: Uint128) -> StdResult<()> {
+    disburse_escrow_task_store().remove(store, bounty_id.into())
 }
 
 #[cfg(test)]
@@ -85,19 +85,19 @@ mod tests {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
-        let vault_id = Uint128::one();
+        let bounty_id = Uint128::one();
 
-        save_disburse_escrow_task(&mut deps.storage, vault_id, env.block.time).unwrap();
+        save_disburse_escrow_task(&mut deps.storage, bounty_id, env.block.time).unwrap();
 
-        let vault_ids =
+        let bounty_ids =
             get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
                 .unwrap();
 
-        assert_eq!(vault_ids, vec![vault_id]);
+        assert_eq!(bounty_ids, vec![vault_id]);
     }
 
     #[test]
-    fn does_not_fetch_vault_ids_for_tasks_that_are_not_due() {
+    fn does_not_fetch_bounty_ids_for_tasks_that_are_not_due() {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
@@ -108,10 +108,10 @@ mod tests {
         )
         .unwrap();
 
-        let vault_ids =
+        let bounty_ids =
             get_disburse_escrow_tasks(&deps.storage, env.block.time, Some(100)).unwrap();
 
-        assert!(vault_ids.is_empty());
+        assert!(bounty_ids.is_empty());
     }
 
     #[test]
@@ -119,64 +119,64 @@ mod tests {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
-        let vault_id_1 = Uint128::one();
-        let vault_id_2 = Uint128::new(2);
+        let bounty_id_1 = Uint128::one();
+        let bounty_id_2 = Uint128::new(2);
 
-        save_disburse_escrow_task(&mut deps.storage, vault_id_1, env.block.time).unwrap();
-        save_disburse_escrow_task(&mut deps.storage, vault_id_2, env.block.time).unwrap();
+        save_disburse_escrow_task(&mut deps.storage, bounty_id_1, env.block.time).unwrap();
+        save_disburse_escrow_task(&mut deps.storage, bounty_id_2, env.block.time).unwrap();
 
-        let vault_ids =
+        let bounty_ids =
             get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
                 .unwrap();
 
-        assert_eq!(vault_ids, vec![vault_id_1, vault_id_2]);
+        assert_eq!(bounty_ids, vec![bounty_id_1, bounty_id_2]);
     }
 
     #[test]
-    fn deletes_task_by_vault_id() {
+    fn deletes_task_by_bounty_id() {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
-        let vault_id = Uint128::one();
+        let bounty_id = Uint128::one();
 
-        save_disburse_escrow_task(&mut deps.storage, vault_id, env.block.time).unwrap();
+        save_disburse_escrow_task(&mut deps.storage, bounty_id, env.block.time).unwrap();
+
+        let bounty_ids_before_delete =
+            get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
+                .unwrap();
+
+        delete_disburse_escrow_task(&mut deps.storage, bounty_id).unwrap();
+
+        let bounty_ids_after_delete =
+            get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
+                .unwrap();
+
+        assert_eq!(bounty_ids_before_delete, vec![bounty_id]);
+        assert!(bounty_ids_after_delete.is_empty());
+    }
+
+    #[test]
+    fn keeps_other_tasks_when_deleting_task_by_bounty_id() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+
+        let bounty_id_1 = Uint128::one();
+        let bounty_id_2 = Uint128::new(2);
+
+        save_disburse_escrow_task(&mut deps.storage, bounty_id_1, env.block.time).unwrap();
+        save_disburse_escrow_task(&mut deps.storage, bounty_id_2, env.block.time).unwrap();
 
         let vault_ids_before_delete =
             get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
                 .unwrap();
 
-        delete_disburse_escrow_task(&mut deps.storage, vault_id).unwrap();
+        delete_disburse_escrow_task(&mut deps.storage, bounty_id_1).unwrap();
 
-        let vault_ids_after_delete =
+        let bounty_ids_after_delete =
             get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
                 .unwrap();
 
-        assert_eq!(vault_ids_before_delete, vec![vault_id]);
-        assert!(vault_ids_after_delete.is_empty());
-    }
-
-    #[test]
-    fn keeps_other_tasks_when_deleting_task_by_vault_id() {
-        let mut deps = mock_dependencies();
-        let env = mock_env();
-
-        let vault_id_1 = Uint128::one();
-        let vault_id_2 = Uint128::new(2);
-
-        save_disburse_escrow_task(&mut deps.storage, vault_id_1, env.block.time).unwrap();
-        save_disburse_escrow_task(&mut deps.storage, vault_id_2, env.block.time).unwrap();
-
-        let vault_ids_before_delete =
-            get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
-                .unwrap();
-
-        delete_disburse_escrow_task(&mut deps.storage, vault_id_1).unwrap();
-
-        let vault_ids_after_delete =
-            get_disburse_escrow_tasks(&deps.storage, env.block.time.plus_seconds(10), Some(100))
-                .unwrap();
-
-        assert_eq!(vault_ids_before_delete, vec![vault_id_1, vault_id_2]);
-        assert_eq!(vault_ids_after_delete, vec![vault_id_2]);
+        assert_eq!(bounty_ids_before_delete, vec![bounty_id_1, bounty_id_2]);
+        assert_eq!(bounty_ids_after_delete, vec![bounty_id_2]);
     }
 }
