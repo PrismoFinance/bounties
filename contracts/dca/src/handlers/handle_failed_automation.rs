@@ -1,9 +1,9 @@
 use crate::{
     error::ContractError,
     state::{
-        cache::{POST_EXECUTION_ACTION_CACHE, VAULT_ID_CACHE},
+        cache::{POST_EXECUTION_ACTION_CACHE, BOUNTY_ID_CACHE},
         events::create_event,
-        vaults::get_vault,
+        bounties::get_bounty,
     },
     types::event::{EventBuilder, EventData},
 };
@@ -15,14 +15,14 @@ pub fn handle_failed_automation_handler(
     env: Env,
     reply: Reply,
 ) -> Result<Response, ContractError> {
-    let vault_id = VAULT_ID_CACHE.load(deps.storage)?;
-    let vault = get_vault(deps.storage, vault_id)?;
+    let bounty_id = BOUNTY_ID_CACHE.load(deps.storage)?;
+    let bounty = get_bounty(deps.storage, bounty_id)?;
 
-    let mut cache = POST_EXECUTION_ACTION_CACHE.load(deps.storage, vault_id.into())?;
+    let mut cache = POST_EXECUTION_ACTION_CACHE.load(deps.storage, bounty_id.into())?;
     let entry = cache.pop_front().unwrap();
-    POST_EXECUTION_ACTION_CACHE.save(deps.storage, vault_id.into(), &cache)?;
+    POST_EXECUTION_ACTION_CACHE.save(deps.storage, bounty_id.into(), &cache)?;
 
-    let destination_num = vault.destinations.len() - cache.len();
+    let destination_num = bounty.destinations.len() - cache.len();
 
     Ok(match reply.result {
         SubMsgResult::Ok(_) => Response::new()
@@ -31,7 +31,7 @@ pub fn handle_failed_automation_handler(
             create_event(
                 deps.storage,
                 EventBuilder::new(
-                    vault_id,
+                    bounty_id,
                     env.block,
                     EventData::DcaVaultPostExecutionActionFailed {
                         msg: entry.msg,
@@ -44,7 +44,7 @@ pub fn handle_failed_automation_handler(
                 .add_attribute(format!("destination_msg_{}", destination_num), "failed")
                 .add_submessage(SubMsg::new(into_bank_msg(
                     deps.api,
-                    vault.owner.as_ref(),
+                    bounty.owner.as_ref(),
                     entry.funds,
                 )?))
         }
@@ -60,13 +60,13 @@ mod handle_failed_automation_handler_tests {
         helpers::disbursement::get_disbursement_messages,
         state::cache::{PostExecutionActionCacheEntry, POST_EXECUTION_ACTION_CACHE},
         tests::{
-            helpers::{instantiate_contract, setup_vault},
+            helpers::{instantiate_contract, setup_bounty},
             mocks::ADMIN,
         },
         types::{
             destination::Destination,
             event::{EventBuilder, EventData},
-            vault::Vault,
+            bounty::Bounty,
         },
     };
     use cosmwasm_std::{
@@ -101,20 +101,20 @@ mod handle_failed_automation_handler_tests {
             },
         ];
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 destinations: destinations.clone(),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         get_disbursement_messages(
             &deps.api.clone(),
             deps.as_mut().storage,
-            &vault,
-            vault.swap_amount,
+            &bounty,
+            bounty.swap_amount,
         )
         .unwrap();
 
@@ -132,7 +132,7 @@ mod handle_failed_automation_handler_tests {
         .unwrap();
 
         let cache = POST_EXECUTION_ACTION_CACHE
-            .load(deps.as_ref().storage, vault.id.into())
+            .load(deps.as_ref().storage, bounty.id.into())
             .unwrap();
 
         assert_eq!(
@@ -143,15 +143,15 @@ mod handle_failed_automation_handler_tests {
                         contract_addr: destinations[1].address.to_string(),
                         msg: destinations[1].msg.clone().unwrap(),
                         funds: vec![Coin::new(
-                            (vault.swap_amount * destinations[1].allocation).into(),
-                            vault.target_denom.clone()
+                            (bounty.swap_amount * destinations[1].allocation).into(),
+                            bounty.target_denom.clone()
                         )],
                     },
                     AFTER_FAILED_AUTOMATION_REPLY_ID
                 ),
                 funds: vec![Coin::new(
-                    (vault.swap_amount * destinations[1].allocation).into(),
-                    vault.target_denom
+                    (bounty.swap_amount * destinations[1].allocation).into(),
+                    bounty.target_denom
                 )],
             }])
         );
@@ -182,20 +182,20 @@ mod handle_failed_automation_handler_tests {
             },
         ];
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 destinations,
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         get_disbursement_messages(
             &deps.api.clone(),
             deps.as_mut().storage,
-            &vault,
-            vault.swap_amount,
+            &bounty,
+            bounty.swap_amount,
         )
         .unwrap();
 
@@ -240,20 +240,20 @@ mod handle_failed_automation_handler_tests {
             },
         ];
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 destinations: destinations.clone(),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         get_disbursement_messages(
             &deps.api.clone(),
             deps.as_mut().storage,
-            &vault,
-            vault.swap_amount,
+            &bounty,
+            bounty.swap_amount,
         )
         .unwrap();
 
@@ -268,7 +268,7 @@ mod handle_failed_automation_handler_tests {
         .unwrap();
 
         let cache = POST_EXECUTION_ACTION_CACHE
-            .load(deps.as_ref().storage, vault.id.into())
+            .load(deps.as_ref().storage, bounty.id.into())
             .unwrap();
 
         assert_eq!(
@@ -279,15 +279,15 @@ mod handle_failed_automation_handler_tests {
                         contract_addr: destinations[1].address.to_string(),
                         msg: destinations[1].msg.clone().unwrap(),
                         funds: vec![Coin::new(
-                            (vault.swap_amount * destinations[1].allocation).into(),
-                            vault.target_denom.clone()
+                            (bounty.swap_amount * destinations[1].allocation).into(),
+                            bounty.target_denom.clone()
                         )],
                     },
                     AFTER_FAILED_AUTOMATION_REPLY_ID
                 ),
                 funds: vec![Coin::new(
-                    (vault.swap_amount * destinations[1].allocation).into(),
-                    vault.target_denom
+                    (bounty.swap_amount * destinations[1].allocation).into(),
+                    bounty.target_denom
                 )],
             }])
         );
@@ -327,20 +327,20 @@ mod handle_failed_automation_handler_tests {
             },
         ];
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 destinations: destinations.clone(),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         get_disbursement_messages(
             &deps.api.clone(),
             deps.as_mut().storage,
-            &vault,
-            vault.swap_amount,
+            &bounty,
+            bounty.swap_amount,
         )
         .unwrap();
 
@@ -354,14 +354,14 @@ mod handle_failed_automation_handler_tests {
         )
         .unwrap();
 
-        let events = get_events_by_resource_id_handler(deps.as_ref(), vault.id, None, None, None)
+        let events = get_events_by_resource_id_handler(deps.as_ref(), bounty.id, None, None, None)
             .unwrap()
             .events;
 
         assert_eq!(
             events[0],
             EventBuilder::new(
-                vault.id,
+                bounty.id,
                 env.block,
                 EventData::DcaVaultPostExecutionActionFailed {
                     msg: SubMsg::reply_always(
@@ -369,15 +369,15 @@ mod handle_failed_automation_handler_tests {
                             contract_addr: destinations[0].address.to_string(),
                             msg: destinations[0].msg.clone().unwrap(),
                             funds: vec![Coin::new(
-                                (vault.swap_amount * destinations[0].allocation).into(),
-                                vault.target_denom.clone()
+                                (bounty.swap_amount * destinations[0].allocation).into(),
+                                bounty.target_denom.clone()
                             )]
                         },
                         AFTER_FAILED_AUTOMATION_REPLY_ID
                     ),
                     funds: vec![Coin::new(
-                        (vault.swap_amount * destinations[0].allocation).into(),
-                        vault.target_denom
+                        (bounty.swap_amount * destinations[0].allocation).into(),
+                        bounty.target_denom
                     )],
                 },
             )
@@ -419,20 +419,20 @@ mod handle_failed_automation_handler_tests {
             },
         ];
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 destinations: destinations.clone(),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         get_disbursement_messages(
             &deps.api.clone(),
             deps.as_mut().storage,
-            &vault,
-            vault.swap_amount,
+            &bounty,
+            bounty.swap_amount,
         )
         .unwrap();
 
@@ -451,8 +451,8 @@ mod handle_failed_automation_handler_tests {
             vec![SubMsg::new(BankMsg::Send {
                 to_address: vault.owner.to_string(),
                 amount: vec![Coin::new(
-                    (vault.swap_amount * destinations[0].allocation).into(),
-                    vault.target_denom
+                    (bounty.swap_amount * destinations[0].allocation).into(),
+                    bounty.target_denom
                 )],
             })]
         );
