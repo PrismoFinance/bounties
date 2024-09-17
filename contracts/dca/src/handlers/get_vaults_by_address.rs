@@ -1,15 +1,15 @@
-use crate::state::vaults::get_vaults_by_address as fetch_vaults_by_address;
-use crate::types::vault::VaultStatus;
-use crate::{helpers::validation::assert_page_limit_is_valid, msg::VaultsResponse};
+use crate::state::bounties::get_bounties_by_address as fetch_bounties_by_address;
+use crate::types::bounty::BountyStatus;
+use crate::{helpers::validation::assert_page_limit_is_valid, msg::BountiesResponse};
 use cosmwasm_std::{Addr, Deps, StdResult, Uint128};
 
-pub fn get_vaults_by_address_handler(
+pub fn get_bounties_by_address_handler(
     deps: Deps,
     address: Addr,
-    status: Option<VaultStatus>,
+    status: Option<BountyStatus>,
     start_after: Option<Uint128>,
     limit: Option<u16>,
-) -> StdResult<VaultsResponse> {
+) -> StdResult<BountiesResponse> {
     deps.api.addr_validate(address.as_ref())?;
     assert_page_limit_is_valid(limit)?;
 
