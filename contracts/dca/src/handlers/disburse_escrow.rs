@@ -7,15 +7,15 @@ use crate::{
         validation::assert_sender_is_executor,
     },
     state::{
-        cache::VAULT_ID_CACHE,
+        cache::BOUNTY_ID_CACHE,
         config::get_config,
         disburse_escrow_tasks::{delete_disburse_escrow_task, get_disburse_escrow_task_due_date},
         events::create_event,
-        vaults::{get_vault, update_vault},
+        bounties::{get_bounty, update_bounty},
     },
     types::{
         event::{EventBuilder, EventData},
-        vault::Vault,
+        bounty::Bounty,
     },
 };
 use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo, Response, Uint128};
@@ -25,30 +25,30 @@ pub fn disburse_escrow_handler(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    vault_id: Uint128,
+    bounty_id: Uint128,
 ) -> Result<Response, ContractError> {
     assert_sender_is_executor(deps.storage, &env, &info.sender)?;
 
-    let vault = get_vault(deps.storage, vault_id)?;
+    let bounty = get_bounty(deps.storage, bounty_id)?;
 
     let response = Response::new()
         .add_attribute("disburse_escrow", "true")
-        .add_attribute("vault_id", vault.id)
-        .add_attribute("owner", vault.owner.clone());
+        .add_attribute("bounty_id", bounty.id)
+        .add_attribute("owner", bounty.owner.clone());
 
-    if vault.escrowed_amount.amount.is_zero() {
+    if bounty.escrowed_amount.amount.is_zero() {
         return Ok(response
             .add_attribute(
                 "performance_fee",
-                format!("{:?}", Coin::new(0, vault.target_denom.clone())),
+                format!("{:?}", Coin::new(0, bounty.target_denom.clone())),
             )
             .add_attribute(
                 "escrow_disbursed",
-                format!("{:?}", Coin::new(0, vault.target_denom)),
+                format!("{:?}", Coin::new(0, bounty.target_denom)),
             ));
     }
 
-    let due_date = get_disburse_escrow_task_due_date(deps.storage, vault.id)?;
+    let due_date = get_disburse_escrow_task_due_date(deps.storage, bounty.id)?;
 
     if let Some(due_date) = due_date {
         if env.block.time < due_date {
@@ -67,27 +67,27 @@ pub fn disburse_escrow_handler(
     let current_price = get_twap_to_now(
         &deps.querier,
         config.exchange_contract_address.clone(),
-        vault.get_swap_denom(),
-        vault.target_denom.clone(),
+        bounty.get_swap_denom(),
+        bounty.target_denom.clone(),
         config.twap_period,
-        vault.route.clone(),
+        bounty.route.clone(),
     )?;
 
-    let performance_fee = get_performance_fee(&vault, current_price)?;
-    let amount_to_disburse = subtract(&vault.escrowed_amount, &performance_fee)?;
+    let performance_fee = get_performance_fee(&bounty, current_price)?;
+    let amount_to_disburse = subtract(&bounty.escrowed_amount, &performance_fee)?;
 
-    let vault = update_vault(
+    let bounty = update_bounty(
         deps.storage,
-        Vault {
-            escrowed_amount: empty_of(vault.escrowed_amount),
-            ..vault
+        Bounty {
+            escrowed_amount: empty_of(bounty.escrowed_amount),
+            ..bounty
         },
     )?;
 
     create_event(
         deps.storage,
         EventBuilder::new(
-            vault.id,
+            bounty.id,
             env.block.clone(),
             EventData::DcaVaultEscrowDisbursed {
                 amount_disbursed: amount_to_disburse.clone(),
@@ -96,22 +96,22 @@ pub fn disburse_escrow_handler(
         ),
     )?;
 
-    delete_disburse_escrow_task(deps.storage, vault.id)?;
+    delete_disburse_escrow_task(deps.storage, bounty.id)?;
 
-    VAULT_ID_CACHE.save(deps.storage, &vault.id)?;
+    BOUNTY_ID_CACHE.save(deps.storage, &bounty.id)?;
 
     Ok(response
         .add_submessages(get_disbursement_messages(
             deps.api,
             deps.storage,
-            &vault,
+            &bounty,
             amount_to_disburse.amount,
         )?)
         .add_submessages(get_fee_messages(
             deps.as_ref(),
             env,
             vec![performance_fee.amount],
-            vault.target_denom.clone(),
+            bounty.target_denom.clone(),
             true,
         )?)
         .add_attribute("performance_fee", format!("{:?}", performance_fee))
@@ -127,10 +127,10 @@ mod disburse_escrow_tests {
         state::{
             config::get_config,
             disburse_escrow_tasks::{get_disburse_escrow_tasks, save_disburse_escrow_task},
-            vaults::get_vault,
+            bounties::get_bounty,
         },
         tests::{
-            helpers::{instantiate_contract, setup_vault},
+            helpers::{instantiate_contract, setup_bounty},
             mocks::{calc_mock_dependencies, ADMIN, DENOM_UKUJI, DENOM_UUSK},
         },
         types::{
@@ -138,7 +138,7 @@ mod disburse_escrow_tests {
             event::{Event, EventData},
             performance_assessment_strategy::PerformanceAssessmentStrategy,
             swap_adjustment_strategy::SwapAdjustmentStrategy,
-            vault::{Vault, VaultStatus},
+            bounty::{Bounty, BountyStatus},
         },
     };
     use cosmwasm_std::{
@@ -155,23 +155,23 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 escrowed_amount: Coin::new(ONE.into(), DENOM_UUSK),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         save_disburse_escrow_task(
             deps.as_mut().storage,
-            vault.id,
+            bounty.id,
             env.block.time.plus_seconds(10),
         )
         .unwrap();
 
-        let err = disburse_escrow_handler(deps.as_mut(), env, info, vault.id).unwrap_err();
+        let err = disburse_escrow_handler(deps.as_mut(), env, info, bounty.id).unwrap_err();
 
         assert!(err
             .to_string()
@@ -179,32 +179,32 @@ mod disburse_escrow_tests {
     }
 
     #[test]
-    fn caches_vault_id_for_after_automation_handler() {
+    fn caches_bounty_id_for_after_automation_handler() {
         let mut deps = calc_mock_dependencies();
         let env = mock_env();
         let info = mock_info(ADMIN, &[]);
 
         instantiate_contract(deps.as_mut(), env.clone(), info);
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 escrowed_amount: Coin::new(ONE.into(), DENOM_UUSK),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         save_disburse_escrow_task(
             deps.as_mut().storage,
-            vault.id,
+            bounty.id,
             env.block.time.minus_seconds(10),
         )
         .unwrap();
 
-        let cached_vault_id = VAULT_ID_CACHE.load(deps.as_ref().storage).unwrap();
+        let cached_bounty_id = BOUNTY_ID_CACHE.load(deps.as_ref().storage).unwrap();
 
-        assert_eq!(vault.id, cached_vault_id)
+        assert_eq!(bounty.id, cached_bounty_id)
     }
 
     #[test]
@@ -215,23 +215,23 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 escrowed_amount: Coin::new(ONE.into(), DENOM_UUSK),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         save_disburse_escrow_task(
             deps.as_mut().storage,
-            vault.id,
+            bounty.id,
             env.block.time.minus_seconds(10),
         )
         .unwrap();
 
-        let response = disburse_escrow_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = disburse_escrow_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         assert!(!response.messages.is_empty());
     }
@@ -244,16 +244,16 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
+            Bounty {
                 escrowed_amount: Coin::new(0, DENOM_UUSK),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let response = disburse_escrow_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = disburse_escrow_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         assert!(response.messages.is_empty());
     }
@@ -266,11 +266,11 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Inactive,
+            Bounty {
+                status: BountyStatus::Inactive,
                 destinations: vec![Destination::default()],
                 deposited_amount: Coin::new(TEN.into(), DENOM_UKUJI),
                 escrowed_amount: Coin::new((ONE * Decimal::percent(5)).into(), DENOM_UUSK),
@@ -281,16 +281,16 @@ mod disburse_escrow_tests {
                     },
                 ),
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::default()),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let response = disburse_escrow_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = disburse_escrow_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         assert!(response.messages.contains(&SubMsg::reply_always(
             BankMsg::Send {
-                to_address: vault.destinations[0].address.to_string(),
-                amount: vec![vault.escrowed_amount]
+                to_address: bounty.destinations[0].address.to_string(),
+                amount: vec![bounty.escrowed_amount]
             },
             AFTER_FAILED_AUTOMATION_REPLY_ID
         )));
@@ -304,11 +304,11 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Inactive,
+            Bounty {
+                status: BountyStatus::Inactive,
                 swapped_amount: Coin::new(TEN.into(), DENOM_UKUJI),
                 received_amount: Coin::new(TEN.into(), DENOM_UUSK),
                 deposited_amount: Coin::new(TEN.into(), DENOM_UKUJI),
@@ -320,7 +320,7 @@ mod disburse_escrow_tests {
                     },
                 ),
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::default()),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
@@ -328,13 +328,13 @@ mod disburse_escrow_tests {
 
         let config = get_config(&deps.storage).unwrap();
 
-        let response = disburse_escrow_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        let response = disburse_escrow_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
         assert_eq!(
             response.messages.first().unwrap(),
             &SubMsg::new(BankMsg::Send {
                 to_address: config.fee_collectors[0].address.to_string(),
-                amount: vec![vault.escrowed_amount]
+                amount: vec![bounty.escrowed_amount]
             })
         );
     }
@@ -347,11 +347,11 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Inactive,
+            Bounty {
+                status: BountyStatus::Inactive,
                 swapped_amount: Coin::new(TEN.into(), DENOM_UKUJI),
                 received_amount: Coin::new((TEN + ONE).into(), DENOM_UUSK),
                 deposited_amount: Coin::new(TEN.into(), DENOM_UKUJI),
@@ -363,31 +363,31 @@ mod disburse_escrow_tests {
                     },
                 ),
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::default()),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        disburse_escrow_handler(deps.as_mut(), env.clone(), info, vault.id).unwrap();
+        disburse_escrow_handler(deps.as_mut(), env.clone(), info, bounty.id).unwrap();
 
-        let events = get_events_by_resource_id_handler(deps.as_ref(), vault.id, None, None, None)
+        let events = get_events_by_resource_id_handler(deps.as_ref(), bounty.id, None, None, None)
             .unwrap()
             .events;
 
         let performance_fee = Coin::new(
             (ONE * Decimal::percent(20) - Uint128::one()).into(),
-            vault.target_denom.clone(),
+            bounty.target_denom.clone(),
         );
 
         assert_eq!(
             events.get(0).unwrap(),
             &Event {
                 id: 1,
-                resource_id: vault.id,
+                resource_id: bounty.id,
                 timestamp: env.block.time,
                 block_height: env.block.height,
                 data: EventData::DcaVaultEscrowDisbursed {
                     amount_disbursed: Coin::new(
-                        ((subtract(&vault.escrowed_amount, &performance_fee).unwrap()).amount
+                        ((subtract(&bounty.escrowed_amount, &performance_fee).unwrap()).amount
                             - Uint128::one())
                         .into(),
                         DENOM_UUSK
@@ -406,11 +406,11 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Inactive,
+            Bounty {
+                status: BountyStatus::Inactive,
                 swapped_amount: Coin::new(TEN.into(), DENOM_UKUJI),
                 received_amount: Coin::new((TEN + ONE).into(), DENOM_UUSK),
                 deposited_amount: Coin::new(TEN.into(), DENOM_UKUJI),
@@ -422,17 +422,17 @@ mod disburse_escrow_tests {
                     },
                 ),
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::default()),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        disburse_escrow_handler(deps.as_mut(), env, info, vault.id).unwrap();
+        disburse_escrow_handler(deps.as_mut(), env, info, bounty.id).unwrap();
 
-        let vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
         assert_eq!(
-            vault.escrowed_amount,
-            Coin::new(0, vault.target_denom.clone())
+            bounty.escrowed_amount,
+            Coin::new(0, bounty.target_denom.clone())
         );
     }
 
@@ -444,11 +444,11 @@ mod disburse_escrow_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             env.clone(),
-            Vault {
-                status: VaultStatus::Inactive,
+            Bounty {
+                status: BountyStatus::Inactive,
                 swapped_amount: Coin::new(TEN.into(), DENOM_UKUJI),
                 received_amount: Coin::new((TEN + ONE).into(), DENOM_UUSK),
                 deposited_amount: Coin::new(TEN.into(), DENOM_UKUJI),
@@ -460,13 +460,13 @@ mod disburse_escrow_tests {
                     },
                 ),
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::default()),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
         save_disburse_escrow_task(
             deps.as_mut().storage,
-            vault.id,
+            bounty.id,
             env.block.time.minus_seconds(10),
         )
         .unwrap();
@@ -474,7 +474,7 @@ mod disburse_escrow_tests {
         let disburse_escrow_tasks_before =
             get_disburse_escrow_tasks(deps.as_ref().storage, env.block.time, None).unwrap();
 
-        disburse_escrow_handler(deps.as_mut(), env.clone(), info, vault.id).unwrap();
+        disburse_escrow_handler(deps.as_mut(), env.clone(), info, bounty.id).unwrap();
 
         let disburse_escrow_tasks_after =
             get_disburse_escrow_tasks(deps.as_ref().storage, env.block.time, None).unwrap();
