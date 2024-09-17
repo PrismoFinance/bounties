@@ -3,7 +3,7 @@ use cosmwasm_std::{Coin, SubMsg, Uint128};
 use cw_storage_plus::{Item, Map};
 use std::collections::VecDeque;
 
-pub const VAULT_ID_CACHE: Item<Uint128> = Item::new("vault_id_cache_v1");
+pub const BOUNTY_ID_CACHE: Item<Uint128> = Item::new("bounty_id_cache_v1");
 
 #[cw_serde]
 pub struct SwapCache {
