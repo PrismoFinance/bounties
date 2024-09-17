@@ -7,7 +7,7 @@ use crate::types::swap_adjustment_strategy::{
     SwapAdjustmentStrategy, SwapAdjustmentStrategyParams,
 };
 use crate::types::time_interval::TimeInterval;
-use crate::types::vault::{Vault, VaultStatus};
+use crate::types::bounty::{Bounty, BountyStatus};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, Coin, Decimal, Uint128, Uint64};
 use cw20::Cw20ReceiveMsg;
@@ -35,7 +35,7 @@ pub struct MigrateMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    CreateVault {
+    CreateBounty {
         owner: Option<Addr>,
         label: Option<String>,
         destinations: Option<Vec<Destination>>, // Destination is in types and consists of allocation, address, and msg. 
@@ -52,8 +52,8 @@ pub enum ExecuteMsg {
         address: Addr,
         bounty_id: Uint128,
     },
-    UpdateVault {
-        vault_id: Uint128,
+    UpdateBounty {
+        bounty_id: Uint128,
         label: Option<String>,
         destinations: Option<Vec<Destination>>,
         slippage_tolerance: Option<Decimal>,
@@ -62,7 +62,7 @@ pub enum ExecuteMsg {
         swap_adjustment_strategy: Option<SwapAdjustmentStrategyParams>,
         swap_amount: Option<Uint128>,
     },
-    CancelVault {
+    CancelBounty {
         vault_id: Uint128,
     },
     ExecuteTrigger {
@@ -87,7 +87,7 @@ pub enum ExecuteMsg {
         value: Decimal,
     },
     DisburseEscrow {
-        vault_id: Uint128,
+        bounty_id: Uint128,
     },
     ZDelegate {
         delegator_address: Addr,
@@ -110,17 +110,17 @@ pub enum QueryMsg {
     GetTimeTriggerIds { limit: Option<u16> },
     #[returns(TriggerIdResponse)]
     GetTriggerIdByFinLimitOrderIdx { order_idx: Uint128 },
-    #[returns(VaultResponse)]
-    GetVault { vault_id: Uint128 },
-    #[returns(VaultsResponse)]
-    GetVaultsByAddress {
+    #[returns(BountyResponse)]
+    GetBounty { vault_id: Uint128 },
+    #[returns(BountiesResponse)]
+    GetBountiesByAddress {
         address: Addr,
-        status: Option<VaultStatus>,
+        status: Option<BountyStatus>,
         start_after: Option<Uint128>,
         limit: Option<u16>,
     },
-    #[returns(VaultsResponse)]
-    GetVaults {
+    #[returns(BountiesResponse)]
+    GetBounties {
         start_after: Option<Uint128>,
         limit: Option<u16>,
         reverse: Option<bool>,
@@ -138,8 +138,8 @@ pub enum QueryMsg {
         limit: Option<u16>,
         reverse: Option<bool>,
     },
-    #[returns(VaultPerformanceResponse)]
-    GetVaultPerformance { vault_id: Uint128 },
+    #[returns(BountyPerformanceResponse)]
+    GetBountyPerformance { bounty_id: Uint128 },
     #[returns(DisburseEscrowTasksResponse)]
     GetDisburseEscrowTasks { limit: Option<u16> },
 }
@@ -165,19 +165,19 @@ pub struct TriggerIdsResponse {
 }
 
 #[cw_serde]
-pub struct VaultResponse {
-    pub vault: Vault,
+pub struct BountyResponse {
+    pub bounty: Bounty,
 }
 
 #[cw_serde]
-pub struct VaultPerformanceResponse {
+pub struct BountyPerformanceResponse {
     pub fee: Coin,
     pub factor: Decimal,
 }
 
 #[cw_serde]
-pub struct VaultsResponse {
-    pub vaults: Vec<Vault>,
+pub struct BountiesResponse {
+    pub bounties: Vec<Bounty>,
 }
 
 #[cw_serde]
@@ -192,5 +192,5 @@ pub struct CustomFeesResponse {
 
 #[cw_serde]
 pub struct DisburseEscrowTasksResponse {
-    pub vault_ids: Vec<Uint128>,
+    pub bounty_ids: Vec<Uint128>,
 }
