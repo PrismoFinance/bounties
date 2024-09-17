@@ -18,14 +18,8 @@ pub struct InstantiateMsg {
     pub admin: Addr,
     pub executors: Vec<Addr>,
     pub fee_collectors: Vec<FeeCollector>,
-    pub default_swap_fee_percent: Decimal,
-    pub weighted_scale_swap_fee_percent: Decimal,
     pub automation_fee_percent: Decimal,
-    pub default_page_limit: u16,
     pub paused: bool,
-    pub risk_weighted_average_escrow_level: Decimal,
-    pub twap_period: u64,
-    pub default_slippage_tolerance: Decimal,
     pub exchange_contract_address: Addr,
 }
 
@@ -34,14 +28,8 @@ pub struct MigrateMsg {
     pub admin: Addr,
     pub executors: Vec<Addr>,
     pub fee_collectors: Vec<FeeCollector>,
-    pub default_swap_fee_percent: Decimal,
-    pub weighted_scale_swap_fee_percent: Decimal,
     pub automation_fee_percent: Decimal,
-    pub default_page_limit: u16,
     pub paused: bool,
-    pub risk_weighted_average_escrow_level: Decimal,
-    pub twap_period: u64,
-    pub default_slippage_tolerance: Decimal,
     pub exchange_contract_address: Addr,
 }
 
@@ -55,7 +43,7 @@ pub enum ExecuteMsg {
         route: Option<Binary>,
         slippage_tolerance: Option<Decimal>,
         minimum_receive_amount: Option<Uint128>,
-        swap_amount: Uint128,
+        pay_amount: Uint128,
         time_interval: TimeInterval,
         target_start_time_utc_seconds: Option<Uint64>,
         target_receive_amount: Option<Uint128>,
