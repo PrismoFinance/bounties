@@ -3,8 +3,8 @@ use crate::constants::{
     AFTER_SWAP_REPLY_ID, FAIL_SILENTLY_REPLY_ID,
 };
 use crate::error::ContractError;
-use crate::handlers::cancel_vault::cancel_bounty_handler;
-use crate::handlers::create_vault::{create_bounty_handler, save_price_trigger};
+use crate::handlers::cancel_bounty::cancel_bounty_handler;
+use crate::handlers::create_bounty::{create_bounty_handler, save_price_trigger};
 use crate::handlers::deposit::deposit_handler;
 use crate::handlers::disburse_escrow::disburse_escrow_handler;
 use crate::handlers::disburse_funds::disburse_funds_handler;
@@ -16,16 +16,16 @@ use crate::handlers::get_events_by_resource_id::get_events_by_resource_id_handle
 use crate::handlers::get_pairs::get_pairs_handler;
 use crate::handlers::get_time_trigger_ids::get_time_trigger_ids_handler;
 use crate::handlers::get_trigger_id_by_fin_limit_order_idx::get_trigger_id_by_fin_limit_order_idx_handler;
-use crate::handlers::get_vault::get_bounty_handler;
-use crate::handlers::get_vault_performance::get_bounty_performance_handler;
-use crate::handlers::get_vaults::get_bounties_handler;
-use crate::handlers::get_vaults_by_address::get_bounties_by_address_handler;
+use crate::handlers::get_bounty::get_bounty_handler;
+use crate::handlers::get_bounty_performance::get_bounty_performance_handler;
+use crate::handlers::get_bounties::get_bounties_handler;
+use crate::handlers::get_bounties_by_address::get_bounties_by_address_handler;
 use crate::handlers::handle_failed_automation::handle_failed_automation_handler;
 use crate::handlers::instantiate::instantiate_handler;
 use crate::handlers::migrate::migrate_handler;
 use crate::handlers::update_config::update_config_handler;
 use crate::handlers::update_swap_adjustment_handler::update_swap_adjustment_handler;
-use crate::handlers::update_vault::update_bounty_handler;
+use crate::handlers::update_bounty::update_bounty_handler;
 use crate::handlers::z_delegate::{log_delegation_result, z_delegate_handler};
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use cosmwasm_std::from_json;
