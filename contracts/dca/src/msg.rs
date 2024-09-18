@@ -38,6 +38,7 @@ pub enum ExecuteMsg {
     CreateBounty {
         owner: Option<Addr>,
         label: Option<String>,
+        bounty_description: Option<String>,
         destinations: Option<Vec<Destination>>, // Destination is in types and consists of allocation, address, and msg. 
         target_denom: String,
         route: Option<Binary>,
@@ -55,6 +56,7 @@ pub enum ExecuteMsg {
     UpdateBounty {
         bounty_id: Uint128,
         label: Option<String>,
+        bounty_description: Option<String>,
         destinations: Option<Vec<Destination>>,
         slippage_tolerance: Option<Decimal>,
         minimum_receive_amount: Option<Uint128>,
