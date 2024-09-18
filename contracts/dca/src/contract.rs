@@ -65,6 +65,7 @@ pub fn execute(
         ExecuteMsg::CreateBounty {
             owner,
             label,
+            bounty_description,
             destinations,
             target_denom,
             route,
