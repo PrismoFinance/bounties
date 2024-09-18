@@ -13,7 +13,7 @@ Bounties store information relating to the bounty being posted.
 - `status`: `Active`, `Inactive` or `Cancelled`
 - `balance`: the current balance of the bounty
 - `pair`: the FIN pair address and denomination ordering for execution swaps and limit orders
-- `swap_amount`: the amount to be swapped
+- `bounty_description`: the description of the bounty to be completed
 - `time_interval`: the time interval at which the executions should take place once the vault executions have started
 - `model_id`: the bounty id 
 
