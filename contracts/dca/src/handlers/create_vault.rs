@@ -41,6 +41,7 @@ pub fn create_bounty_handler(
     info: &MessageInfo,
     owner: Addr,
     label: Option<String>,
+    bounty_description: Option<String>,
     mut destinations: Vec<Destination>,
     target_denom: String,
     route: Option<Binary>,
