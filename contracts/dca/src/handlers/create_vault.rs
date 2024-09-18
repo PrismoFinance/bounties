@@ -14,11 +14,11 @@ use crate::helpers::validation::{
 };
 use crate::helpers::vault::get_risk_weighted_average_model_id;
 use crate::msg::ExecuteMsg;
-use crate::state::cache::VAULT_ID_CACHE;
+use crate::state::cache::BOUNTY_ID_CACHE;
 use crate::state::config::get_config;
 use crate::state::events::create_event;
 use crate::state::triggers::save_trigger;
-use crate::state::vaults::{save_vault, update_vault};
+use crate::state::vaults::{save_bounty, update_bounty};
 use crate::types::destination::Destination;
 use crate::types::event::{EventBuilder, EventData};
 use crate::types::performance_assessment_strategy::{
