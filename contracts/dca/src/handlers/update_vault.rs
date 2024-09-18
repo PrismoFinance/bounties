@@ -16,7 +16,7 @@ use crate::{
     state::{
         events::create_event,
         triggers::{delete_trigger, save_trigger},
-        vaults::{get_vault, update_vault},
+        bounties::{get_bounty, update_bounty},
     },
     types::{
         destination::Destination,
@@ -29,12 +29,13 @@ use crate::{
 };
 use cosmwasm_std::{Decimal, DepsMut, Env, MessageInfo, Response, Uint128};
 
-pub fn update_vault_handler(
+pub fn update_bounty_handler(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
     vault_id: Uint128,
     label: Option<String>,
+    bounty_description: Option<String>,
     destinations: Option<Vec<Destination>>,
     slippage_tolerance: Option<Decimal>,
     minimum_receive_amount: Option<Uint128>,
@@ -42,15 +43,15 @@ pub fn update_vault_handler(
     swap_adjustment_strategy: Option<SwapAdjustmentStrategyParams>,
     swap_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
-    let mut vault = get_vault(deps.storage, vault_id)?;
+    let mut bounty = get_bounty(deps.storage, bounty_id)?;
 
-    asset_sender_is_vault_owner(vault.owner.clone(), info.sender)?;
-    assert_vault_is_not_cancelled(&vault)?;
+    asset_sender_is_bounty_owner(bounty.owner.clone(), info.sender)?;
+    assert_bounty_is_not_cancelled(&bounty)?;
 
     let mut response = Response::default()
-        .add_attribute("update_vault", "true")
-        .add_attribute("vault_id", vault.id)
-        .add_attribute("owner", vault.owner.clone());
+        .add_attribute("update_bounty", "true")
+        .add_attribute("bounty_id", bounty.id)
+        .add_attribute("owner", bounty.owner.clone());
 
     let mut updates = Vec::<Update>::new();
 
@@ -69,20 +70,20 @@ pub fn update_vault_handler(
             });
         }
 
-        if let Some(minimum_receive_amount) = vault.minimum_receive_amount {
+        if let Some(minimum_receive_amount) = bounty.minimum_receive_amount {
             let updated_minimum_receive_amount =
-                Some(minimum_receive_amount * Decimal::from_ratio(swap_amount, vault.swap_amount));
+                Some(minimum_receive_amount * Decimal::from_ratio(swap_amount, bounty.swap_amount));
 
             updates.push(Update {
                 field: "minimum_receive_amount".to_string(),
-                old_value: format!("{:?}", vault.minimum_receive_amount),
+                old_value: format!("{:?}", bounty.minimum_receive_amount),
                 new_value: format!("{:?}", updated_minimum_receive_amount),
             });
 
-            vault.minimum_receive_amount = updated_minimum_receive_amount;
+            bounty.minimum_receive_amount = updated_minimum_receive_amount;
             response = response.add_attribute(
                 "minimum_receive_amount",
-                format!("{:?}", vault.minimum_receive_amount),
+                format!("{:?}", bounty.minimum_receive_amount),
             );
         }
 
@@ -90,36 +91,36 @@ pub fn update_vault_handler(
             base_receive_amount,
             multiplier,
             increase_only,
-        }) = vault.swap_adjustment_strategy
+        }) = bounty.swap_adjustment_strategy
         {
             let updated_swap_adjustment_strategy = Some(SwapAdjustmentStrategy::WeightedScale {
                 base_receive_amount: base_receive_amount
-                    * Decimal::from_ratio(swap_amount, vault.swap_amount),
+                    * Decimal::from_ratio(swap_amount, bounty.swap_amount),
                 multiplier,
                 increase_only,
             });
 
             updates.push(Update {
                 field: "swap_adjustment_strategy".to_string(),
-                old_value: format!("{:?}", vault.swap_adjustment_strategy),
+                old_value: format!("{:?}", bounty.swap_adjustment_strategy),
                 new_value: format!("{:?}", updated_swap_adjustment_strategy),
             });
 
-            vault.swap_adjustment_strategy = updated_swap_adjustment_strategy;
+            bounty.swap_adjustment_strategy = updated_swap_adjustment_strategy;
             response = response.add_attribute(
                 "swap_adjustment_strategy",
-                format!("{:?}", vault.swap_adjustment_strategy),
+                format!("{:?}", bounty.swap_adjustment_strategy),
             );
         }
 
         updates.push(Update {
             field: "swap_amount".to_string(),
-            old_value: format!("{}", vault.swap_amount),
+            old_value: format!("{}", bounty.swap_amount),
             new_value: format!("{}", swap_amount),
         });
 
-        vault.swap_amount = swap_amount;
-        response = response.add_attribute("swap_amount", vault.swap_amount);
+        bounty.swap_amount = swap_amount;
+        response = response.add_attribute("swap_amount", bounty.swap_amount);
     }
 
     if let Some(label) = label {
@@ -127,11 +128,11 @@ pub fn update_vault_handler(
 
         updates.push(Update {
             field: "label".to_string(),
-            old_value: vault.label.unwrap_or_default(),
+            old_value: bounty.label.unwrap_or_default(),
             new_value: label.clone(),
         });
 
-        vault.label = Some(label.clone());
+        bounty.label = Some(label.clone());
         response = response.add_attribute("label", label);
     }
 
@@ -139,7 +140,7 @@ pub fn update_vault_handler(
         if destinations.is_empty() {
             destinations.push(Destination {
                 allocation: Decimal::percent(100),
-                address: vault.owner.clone(),
+                address: bounty.owner.clone(),
                 msg: None,
             });
         }
@@ -151,11 +152,11 @@ pub fn update_vault_handler(
 
         updates.push(Update {
             field: "destinations".to_string(),
-            old_value: format!("{:?}", vault.destinations),
+            old_value: format!("{:?}", bounty.destinations),
             new_value: format!("{:?}", destinations),
         });
 
-        vault.destinations = destinations.clone();
+        bounty.destinations = destinations.clone();
         response = response.add_attribute("destinations", format!("{:?}", destinations));
     }
 
@@ -164,22 +165,22 @@ pub fn update_vault_handler(
 
         updates.push(Update {
             field: "slippage_tolerance".to_string(),
-            old_value: format!("{}", vault.slippage_tolerance),
+            old_value: format!("{}", bounty.slippage_tolerance),
             new_value: format!("{}", slippage_tolerance),
         });
 
-        vault.slippage_tolerance = slippage_tolerance;
+        bounty.slippage_tolerance = slippage_tolerance;
         response = response.add_attribute("slippage_tolerance", slippage_tolerance.to_string());
     }
 
     if let Some(minimum_receive_amount) = minimum_receive_amount {
         updates.push(Update {
             field: "minimum_receive_amount".to_string(),
-            old_value: format!("{}", vault.minimum_receive_amount.unwrap_or_default()),
+            old_value: format!("{}", bounty.minimum_receive_amount.unwrap_or_default()),
             new_value: format!("{}", minimum_receive_amount),
         });
 
-        vault.minimum_receive_amount = Some(minimum_receive_amount);
+        bounty.minimum_receive_amount = Some(minimum_receive_amount);
         response = response.add_attribute("minimum_receive_amount", minimum_receive_amount);
     }
 
@@ -188,28 +189,28 @@ pub fn update_vault_handler(
 
         updates.push(Update {
             field: "time_interval".to_string(),
-            old_value: format!("{}", vault.time_interval),
+            old_value: format!("{}", bounty.time_interval),
             new_value: format!("{}", time_interval),
         });
 
-        vault.time_interval = time_interval.clone();
+        bounty.time_interval = time_interval.clone();
         response = response.add_attribute("time_interval", time_interval);
 
-        if let Some(old_trigger) = vault.trigger.clone() {
-            delete_trigger(deps.storage, vault.id)?;
+        if let Some(old_trigger) = bounty.trigger.clone() {
+            delete_trigger(deps.storage, bounty.id)?;
 
             let new_trigger = TriggerConfiguration::Time {
                 target_time: get_next_target_time(
                     env.block.time,
-                    vault.started_at.unwrap_or(env.block.time),
-                    vault.time_interval.clone(),
+                    bounty.started_at.unwrap_or(env.block.time),
+                    bounty.time_interval.clone(),
                 ),
             };
 
             save_trigger(
                 deps.storage,
                 Trigger {
-                    vault_id: vault.id,
+                    bounty_id: bounty.id,
                     configuration: new_trigger.clone(),
                 },
             )?;
@@ -229,17 +230,17 @@ pub fn update_vault_handler(
             base_receive_amount,
             multiplier,
             increase_only,
-        }) => match vault.swap_adjustment_strategy {
+        }) => match bounty.swap_adjustment_strategy {
             Some(SwapAdjustmentStrategy::WeightedScale { .. }) => {
                 assert_weighted_scale_multiplier_is_no_more_than_10(multiplier)?;
 
                 updates.push(Update {
                     field: "swap_adjustment_strategy".to_string(),
-                    old_value: format!("{:?}", vault.swap_adjustment_strategy),
+                    old_value: format!("{:?}", bounty.swap_adjustment_strategy),
                     new_value: format!("{:?}", swap_adjustment_strategy),
                 });
 
-                vault.swap_adjustment_strategy = Some(SwapAdjustmentStrategy::WeightedScale {
+                bounty.swap_adjustment_strategy = Some(SwapAdjustmentStrategy::WeightedScale {
                     base_receive_amount,
                     multiplier,
                     increase_only,
@@ -247,14 +248,14 @@ pub fn update_vault_handler(
 
                 response = response.add_attribute(
                     "swap_adjustment_strategy",
-                    format!("{:?}", vault.swap_adjustment_strategy),
+                    format!("{:?}", bounty.swap_adjustment_strategy),
                 );
             }
             _ => {
                 return Err(ContractError::CustomError {
                     val: format!(
                         "cannot update swap adjustment strategy from {:?} to {:?}",
-                        vault.swap_adjustment_strategy, swap_adjustment_strategy
+                        bounty.swap_adjustment_strategy, swap_adjustment_strategy
                     ),
                 })
             }
@@ -263,33 +264,33 @@ pub fn update_vault_handler(
             return Err(ContractError::CustomError {
                 val: format!(
                     "cannot update swap adjustment strategy from {:?} to {:?}",
-                    vault.swap_adjustment_strategy, swap_adjustment_strategy
+                    bounty.swap_adjustment_strategy, swap_adjustment_strategy
                 ),
             })
         }
         _ => {}
     }
 
-    update_vault(deps.storage, vault.clone())?;
+    update_bounty(deps.storage, vault.clone())?;
 
     create_event(
         deps.storage,
-        EventBuilder::new(vault.id, env.block, EventData::DcaVaultUpdated { updates }),
+        EventBuilder::new(bounty.id, env.block, EventData::DcaVaultUpdated { updates }),
     )?;
 
     Ok(response)
 }
 
 #[cfg(test)]
-mod update_vault_tests {
-    use super::update_vault_handler;
+mod update_bounty_tests {
+    use super::update_bounty_handler;
     use crate::{
         constants::{ONE, TEN},
         handlers::get_events_by_resource_id::get_events_by_resource_id_handler,
         helpers::time::get_next_target_time,
-        state::{config::update_config, vaults::get_vault},
+        state::{config::update_config, vaults::get_bounty},
         tests::{
-            helpers::{instantiate_contract, setup_vault},
+            helpers::{instantiate_contract, setup_bounty},
             mocks::{ADMIN, USER},
         },
         types::{
@@ -303,7 +304,7 @@ mod update_vault_tests {
             time_interval::TimeInterval,
             trigger::TriggerConfiguration,
             update::Update,
-            vault::{Vault, VaultStatus},
+            bounty::{Bounty, BountyStatus},
         },
     };
     use cosmwasm_std::{
@@ -317,13 +318,13 @@ mod update_vault_tests {
 
         instantiate_contract(deps.as_mut(), mock_env(), mock_info(ADMIN, &[]));
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             Some(Decimal::percent(101)),
@@ -346,13 +347,13 @@ mod update_vault_tests {
 
         instantiate_contract(deps.as_mut(), mock_env(), mock_info(ADMIN, &[]));
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -375,7 +376,7 @@ mod update_vault_tests {
 
         instantiate_contract(deps.as_mut(), mock_env(), mock_info(ADMIN, &[]));
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let label = Some("12345678910".repeat(10));
 
@@ -383,7 +384,7 @@ mod update_vault_tests {
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             label,
             None,
             None,
@@ -396,32 +397,32 @@ mod update_vault_tests {
 
         assert_eq!(
             err.to_string(),
-            "Error: Vault label cannot be longer than 100 characters"
+            "Error: Bounty label cannot be longer than 100 characters"
         );
     }
 
     #[test]
-    fn for_vault_with_different_owner_fails() {
+    fn for_bounty_with_different_owner_fails() {
         let mut deps = mock_dependencies();
 
         instantiate_contract(deps.as_mut(), mock_env(), mock_info(ADMIN, &[]));
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 owner: Addr::unchecked("random"),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let label = Some("My new vault".to_string());
+        let label = Some("My new bounty".to_string());
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             label,
             None,
             None,
@@ -436,25 +437,25 @@ mod update_vault_tests {
     }
 
     #[test]
-    fn for_cancelled_vault_fails() {
+    fn for_cancelled_bounty_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
-                status: VaultStatus::Cancelled,
-                ..Vault::default()
+            Bounty {
+                status: BountyStatus::Cancelled,
+                ..Bounty::default()
             },
         );
 
-        let label = Some("My new vault".to_string());
+        let label = Some("My new bounty".to_string());
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             label,
             None,
             None,
@@ -465,14 +466,14 @@ mod update_vault_tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.to_string(), "Error: vault is already cancelled");
+        assert_eq!(err.to_string(), "Error: bounty is already cancelled");
     }
 
     #[test]
     fn with_more_than_10_destinations_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let destinations = vec![
             Destination {
@@ -483,11 +484,11 @@ mod update_vault_tests {
             11
         ];
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             Some(destinations),
             None,
@@ -508,7 +509,7 @@ mod update_vault_tests {
     fn with_destination_allocations_less_than_100_percent_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let destinations = vec![
             Destination {
@@ -523,11 +524,11 @@ mod update_vault_tests {
             },
         ];
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             Some(destinations),
             None,
@@ -548,7 +549,7 @@ mod update_vault_tests {
     fn with_destination_allocations_more_than_100_percent_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let destinations = vec![
             Destination {
@@ -563,11 +564,11 @@ mod update_vault_tests {
             },
         ];
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             Some(destinations),
             None,
@@ -588,7 +589,7 @@ mod update_vault_tests {
     fn with_destination_with_zero_allocation_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let destinations = vec![
             Destination {
@@ -603,11 +604,11 @@ mod update_vault_tests {
             },
         ];
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             Some(destinations),
             None,
@@ -634,12 +635,12 @@ mod update_vault_tests {
             position_type: PositionType::Enter,
         });
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 swap_adjustment_strategy: existing_swap_adjustment_strategy.clone(),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
@@ -648,11 +649,11 @@ mod update_vault_tests {
             position_type: PositionType::Enter,
         };
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -682,12 +683,12 @@ mod update_vault_tests {
             position_type: PositionType::Enter,
         });
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 swap_adjustment_strategy: existing_swap_adjustment_strategy.clone(),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
@@ -697,11 +698,11 @@ mod update_vault_tests {
             increase_only: false,
         });
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -725,7 +726,7 @@ mod update_vault_tests {
     fn adding_weighted_scale_swap_adjustment_strategy_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let strategy = Some(SwapAdjustmentStrategyParams::WeightedScale {
             base_receive_amount: Uint128::new(2732),
@@ -733,11 +734,11 @@ mod update_vault_tests {
             increase_only: false,
         });
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -752,7 +753,7 @@ mod update_vault_tests {
             err.to_string(),
             format!(
                 "Error: cannot update swap adjustment strategy from {:?} to {:?}",
-                vault.swap_adjustment_strategy, strategy
+                bounty.swap_adjustment_strategy, strategy
             )
         );
     }
@@ -761,13 +762,13 @@ mod update_vault_tests {
     fn updating_swap_amount_and_minimum_receive_amount_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -790,13 +791,13 @@ mod update_vault_tests {
     fn updating_swap_amount_and_swap_adjustment_strategy_fails() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
-        let err = update_vault_handler(
+        let err = update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -823,35 +824,35 @@ mod update_vault_tests {
     fn updating_swap_amount_updates_minimum_receive_amount() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 swap_amount: ONE,
                 minimum_receive_amount: Some(TEN),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
             None,
             None,
             None,
-            Some(vault.swap_amount * Uint128::new(2)),
+            Some(bounty.swap_amount * Uint128::new(2)),
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
         assert_eq!(
-            updated_vault.minimum_receive_amount,
+            updated_bounty.minimum_receive_amount,
             Some(TEN * Uint128::new(2))
         );
     }
@@ -860,38 +861,38 @@ mod update_vault_tests {
     fn updating_swap_amount_updates_weighted_scale_swap_adjustment_strategy_base_receive_amount() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::WeightedScale {
                     base_receive_amount: Uint128::new(2732),
                     multiplier: Decimal::percent(150),
                     increase_only: false,
                 }),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
             None,
             None,
             None,
-            Some(vault.swap_amount * Uint128::new(2)),
+            Some(bounty.swap_amount * Uint128::new(2)),
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
         assert_eq!(
-            updated_vault.swap_adjustment_strategy,
+            updated_bounty.swap_adjustment_strategy,
             Some(SwapAdjustmentStrategy::WeightedScale {
                 base_receive_amount: Uint128::new(2732) * Uint128::new(2),
                 multiplier: Decimal::percent(150),
@@ -904,27 +905,27 @@ mod update_vault_tests {
     fn updates_swap_amount() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::WeightedScale {
                     base_receive_amount: Uint128::new(2732),
                     multiplier: Decimal::percent(150),
                     increase_only: false,
                 }),
                 minimum_receive_amount: Some(ONE),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
-        let swap_amount = vault.swap_amount * Uint128::new(2);
+        let swap_amount = bounty.swap_amount * Uint128::new(2);
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -935,26 +936,26 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_ne!(vault.swap_amount, swap_amount);
-        assert_eq!(updated_vault.swap_amount, swap_amount);
+        assert_ne!(bounty.swap_amount, swap_amount);
+        assert_eq!(updated_bounty.swap_amount, swap_amount);
     }
 
     #[test]
     fn updates_weighted_scale_swap_adjustment_strategy() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(
+        let bounty = setup_bounty(
             deps.as_mut(),
             mock_env(),
-            Vault {
+            Bounty {
                 swap_adjustment_strategy: Some(SwapAdjustmentStrategy::WeightedScale {
                     base_receive_amount: Uint128::new(2732),
                     multiplier: Decimal::percent(150),
                     increase_only: false,
                 }),
-                ..Vault::default()
+                ..Bounty::default()
             },
         );
 
@@ -968,11 +969,11 @@ mod update_vault_tests {
             increase_only,
         });
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -983,10 +984,10 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
         assert_eq!(
-            updated_vault.swap_adjustment_strategy,
+            updated_bounty.swap_adjustment_strategy,
             Some(SwapAdjustmentStrategy::WeightedScale {
                 base_receive_amount,
                 multiplier,
@@ -996,18 +997,18 @@ mod update_vault_tests {
     }
 
     #[test]
-    fn updates_the_vault_label() {
+    fn updates_the_bounty_label() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let label = Some("123456789".repeat(10));
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             label.clone(),
             None,
             None,
@@ -1018,16 +1019,16 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_eq!(updated_vault.label, label);
+        assert_eq!(updated_bounty.label, label);
     }
 
     #[test]
-    fn updates_the_vault_destinations() {
+    fn updates_the_bounty_destinations() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let destinations = vec![
             Destination {
@@ -1042,11 +1043,11 @@ mod update_vault_tests {
             },
         ];
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             Some(destinations.clone()),
             None,
@@ -1057,23 +1058,23 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_ne!(updated_vault.destinations, vault.destinations);
-        assert_eq!(updated_vault.destinations, destinations);
+        assert_ne!(updated_bounty.destinations, bounty.destinations);
+        assert_eq!(updated_bounty.destinations, destinations);
     }
 
     #[test]
-    fn sets_the_vault_destination_to_owner_when_update_list_is_empty() {
+    fn sets_the_bounty_destination_to_owner_when_update_list_is_empty() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             Some(vec![]),
             None,
@@ -1084,13 +1085,13 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_ne!(updated_vault.destinations, vault.destinations);
+        assert_ne!(updated_bounty.destinations, bounty.destinations);
         assert_eq!(
-            updated_vault.destinations,
+            updated_bounty.destinations,
             vec![Destination {
-                address: vault.owner,
+                address: bounty.owner,
                 allocation: Decimal::percent(100),
                 msg: None,
             }]
@@ -1101,15 +1102,15 @@ mod update_vault_tests {
     fn updates_slippage_tolerance() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let slippage_tolerance = Decimal::percent(1);
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             Some(slippage_tolerance),
@@ -1120,24 +1121,24 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_eq!(updated_vault.slippage_tolerance, slippage_tolerance);
+        assert_eq!(updated_bounty.slippage_tolerance, slippage_tolerance);
     }
 
     #[test]
     fn updates_minimum_receive_amount() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let minimum_receive_amount = Some(Uint128::new(12387));
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -1148,24 +1149,24 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_eq!(updated_vault.minimum_receive_amount, minimum_receive_amount);
+        assert_eq!(updated_bounty.minimum_receive_amount, minimum_receive_amount);
     }
 
     #[test]
     fn updates_time_interval() {
         let mut deps = mock_dependencies();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let time_interval = TimeInterval::Custom { seconds: 31321 };
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             mock_env(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -1176,9 +1177,9 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        assert_eq!(updated_vault.time_interval, time_interval);
+        assert_eq!(updated_bounty.time_interval, time_interval);
     }
 
     #[test]
@@ -1186,15 +1187,15 @@ mod update_vault_tests {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let time_interval = TimeInterval::Custom { seconds: 60 };
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             env.clone(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             None,
             None,
             None,
@@ -1205,15 +1206,15 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let updated_vault = get_vault(deps.as_ref().storage, vault.id).unwrap();
+        let updated_bounty = get_bounty(deps.as_ref().storage, bounty.id).unwrap();
 
-        match updated_vault.trigger {
+        match updated_bounty.trigger {
             Some(TriggerConfiguration::Time { target_time }) => {
                 assert_eq!(
                     target_time,
                     get_next_target_time(
                         env.block.time,
-                        vault.started_at.unwrap_or(env.block.time),
+                        bounty.started_at.unwrap_or(env.block.time),
                         time_interval,
                     )
                 )
@@ -1223,11 +1224,11 @@ mod update_vault_tests {
     }
 
     #[test]
-    fn publishes_vault_updated_event() {
+    fn publishes_bounty_updated_event() {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
-        let vault = setup_vault(deps.as_mut(), mock_env(), Vault::default());
+        let bounty = setup_bounty(deps.as_mut(), mock_env(), Bounty::default());
 
         let new_time_interval = TimeInterval::Custom { seconds: 60 };
 
@@ -1249,11 +1250,11 @@ mod update_vault_tests {
         let new_slippage_tolerance = Decimal::percent(12);
         let new_minimum_receive_amount = Uint128::new(2312312231);
 
-        update_vault_handler(
+        update_bounty_handler(
             deps.as_mut(),
             env.clone(),
             mock_info(USER, &[]),
-            vault.id,
+            bounty.id,
             Some(new_label.to_string()),
             Some(new_destinations.clone()),
             Some(new_slippage_tolerance),
@@ -1264,7 +1265,7 @@ mod update_vault_tests {
         )
         .unwrap();
 
-        let events = get_events_by_resource_id_handler(deps.as_ref(), vault.id, None, None, None)
+        let events = get_events_by_resource_id_handler(deps.as_ref(), bounty.id, None, None, None)
             .unwrap()
             .events;
 
@@ -1279,38 +1280,38 @@ mod update_vault_tests {
                     updates: vec![
                         Update {
                             field: "label".to_string(),
-                            old_value: vault.label.unwrap(),
+                            old_value: bounty.label.unwrap(),
                             new_value: new_label.to_string(),
                         },
                         Update {
                             field: "destinations".to_string(),
-                            old_value: format!("{:?}", vault.destinations),
+                            old_value: format!("{:?}", bounty.destinations),
                             new_value: format!("{:?}", new_destinations),
                         },
                         Update {
                             field: "slippage_tolerance".to_string(),
-                            old_value: vault.slippage_tolerance.to_string(),
+                            old_value: bounty.slippage_tolerance.to_string(),
                             new_value: new_slippage_tolerance.to_string(),
                         },
                         Update {
                             field: "minimum_receive_amount".to_string(),
-                            old_value: vault.minimum_receive_amount.unwrap_or_default().to_string(),
+                            old_value: bounty.minimum_receive_amount.unwrap_or_default().to_string(),
                             new_value: new_minimum_receive_amount.to_string(),
                         },
                         Update {
                             field: "time_interval".to_string(),
-                            old_value: vault.time_interval.to_string(),
+                            old_value: bounty.time_interval.to_string(),
                             new_value: new_time_interval.to_string(),
                         },
                         Update {
                             field: "trigger".to_string(),
-                            old_value: format!("{:?}", vault.trigger.unwrap()),
+                            old_value: format!("{:?}", bounty.trigger.unwrap()),
                             new_value: format!(
                                 "{:?}",
                                 TriggerConfiguration::Time {
                                     target_time: get_next_target_time(
                                         env.block.time,
-                                        vault.started_at.unwrap_or(env.block.time),
+                                        bounty.started_at.unwrap_or(env.block.time),
                                         new_time_interval,
                                     )
                                 }
