@@ -71,12 +71,12 @@ pub fn execute(
             route,
             slippage_tolerance,
             minimum_receive_amount,
-            swap_amount,
+           // swap_amount,
             time_interval,
             target_start_time_utc_seconds,
             target_receive_amount,
-            performance_assessment_strategy,
-            swap_adjustment_strategy,
+          //  performance_assessment_strategy,
+          //  swap_adjustment_strategy,
         } => create_bounty_handler(
             deps,
             env,
@@ -89,12 +89,12 @@ pub fn execute(
             route,
             slippage_tolerance,
             minimum_receive_amount,
-            swap_amount,
+           // swap_amount,
             time_interval,
             target_start_time_utc_seconds,
             target_receive_amount,
-            performance_assessment_strategy,
-            swap_adjustment_strategy,
+           // performance_assessment_strategy,
+           // swap_adjustment_strategy,
         ),
         ExecuteMsg::UpdateBounty {
             vault_id,
@@ -104,8 +104,8 @@ pub fn execute(
             slippage_tolerance,
             minimum_receive_amount,
             time_interval,
-            swap_adjustment_strategy,
-            swap_amount,
+           // swap_adjustment_strategy,
+           // swap_amount,
         } => update_bounty_handler(
             deps,
             env,
@@ -117,8 +117,8 @@ pub fn execute(
             slippage_tolerance,
             minimum_receive_amount,
             time_interval,
-            swap_adjustment_strategy,
-            swap_amount,
+            // swap_adjustment_strategy,
+            // swap_amount,
         ),
         ExecuteMsg::CancelBounty { bounty_id } => cancel_bounty_handler(deps, env, info, bounty_id),
         ExecuteMsg::ExecuteTrigger { trigger_id, route } => {
@@ -130,13 +130,13 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             executors,
             fee_collectors,
-            default_swap_fee_percent,
-            weighted_scale_swap_fee_percent,
+           // default_swap_fee_percent,
+           // weighted_scale_swap_fee_percent,
             automation_fee_percent,
             default_page_limit,
             paused,
             risk_weighted_average_escrow_level,
-            twap_period,
+            // twap_period,
             default_slippage_tolerance,
             exchange_contract_address,
         } => update_config_handler(
@@ -144,21 +144,21 @@ pub fn execute(
             info,
             executors,
             fee_collectors,
-            default_swap_fee_percent,
-            weighted_scale_swap_fee_percent,
+           // default_swap_fee_percent,
+           // weighted_scale_swap_fee_percent,
             automation_fee_percent,
             default_page_limit,
             paused,
             risk_weighted_average_escrow_level,
-            twap_period,
+           // twap_period,
             default_slippage_tolerance,
             exchange_contract_address,
         ),
-        ExecuteMsg::UpdateSwapAdjustment { strategy, value } => {
-            update_swap_adjustment_handler(deps, env, info, strategy, value)
-        }
-        ExecuteMsg::DisburseEscrow { vault_id } => {
-            disburse_escrow_handler(deps, env, info, vault_id)
+        // ExecuteMsg::UpdateSwapAdjustment { strategy, value } => {
+           // update_swap_adjustment_handler(deps, env, info, strategy, value)
+       // }
+        ExecuteMsg::DisburseEscrow { bounty_id } => {
+            disburse_escrow_handler(deps, env, info, bounty_id)
         }
         ExecuteMsg::ZDelegate {
             delegator_address,
@@ -189,7 +189,7 @@ pub fn execute(
 pub fn reply(deps: DepsMut, env: Env, reply: Reply) -> Result<Response, ContractError> {
     match reply.id {
         AFTER_LIMIT_ORDER_PLACED_REPLY_ID => save_price_trigger(deps, reply),
-        AFTER_SWAP_REPLY_ID => disburse_funds_handler(deps, &env, reply),
+        // AFTER_SWAP_REPLY_ID => disburse_funds_handler(deps, &env, reply),
         AFTER_FAILED_AUTOMATION_REPLY_ID => handle_failed_automation_handler(deps, env, reply),
         AFTER_DELEGATION_REPLY_ID => log_delegation_result(reply),
         FAIL_SILENTLY_REPLY_ID => Ok(Response::new()),
