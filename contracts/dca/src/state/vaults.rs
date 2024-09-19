@@ -6,46 +6,46 @@ use crate::{
         performance_assessment_strategy::PerformanceAssessmentStrategy,
         swap_adjustment_strategy::SwapAdjustmentStrategy,
         time_interval::TimeInterval,
-        vault::{Vault, VaultBuilder, VaultStatus},
+        vault::{Bounty, BountyBuilder, BountyStatus},
     },
 };
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Binary, Coin, Decimal, Order, StdResult, Storage, Timestamp, Uint128};
 use cw_storage_plus::{Bound, Index, IndexList, IndexedMap, Item, UniqueIndex};
 
-const VAULT_COUNTER: Item<u64> = Item::new("vault_counter_v8");
+const BOUNTY_COUNTER: Item<u64> = Item::new("vault_counter_v8");
 
-struct VaultIndexes<'a> {
-    pub owner: UniqueIndex<'a, (Addr, u128), VaultData, u128>,
-    pub owner_status: UniqueIndex<'a, (Addr, u8, u128), VaultData, u128>,
+struct BountyIndexes<'a> {
+    pub owner: UniqueIndex<'a, (Addr, u128), BountyData, u128>,
+    pub owner_status: UniqueIndex<'a, (Addr, u8, u128), BountyData, u128>,
 }
 
-impl<'a> IndexList<VaultData> for VaultIndexes<'a> {
-    fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<VaultData>> + '_> {
-        let v: Vec<&dyn Index<VaultData>> = vec![&self.owner, &self.owner_status];
+impl<'a> IndexList<VaultData> for BountyIndexes<'a> {
+    fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<BountyData>> + '_> {
+        let v: Vec<&dyn Index<BountyData>> = vec![&self.owner, &self.owner_status];
         Box::new(v.into_iter())
     }
 }
 
-fn vault_store<'a>() -> IndexedMap<'a, u128, VaultData, VaultIndexes<'a>> {
-    let indexes = VaultIndexes {
-        owner: UniqueIndex::new(|v| (v.owner.clone(), v.id.into()), "vaults_v8__owner"),
+fn bounty_store<'a>() -> IndexedMap<'a, u128, BountyData, BountyIndexes<'a>> {
+    let indexes = BountyIndexes {
+        owner: UniqueIndex::new(|v| (v.owner.clone(), v.id.into()), "bounties_v8__owner"),
         owner_status: UniqueIndex::new(
             |v| (v.owner.clone(), v.status.clone() as u8, v.id.into()),
-            "vaults_v8__owner_status",
+            "bounties_v8__owner_status",
         ),
     };
-    IndexedMap::new("vaults_v8", indexes)
+    IndexedMap::new("bounties_v8", indexes)
 }
 
-pub fn migrate_vault(store: &mut dyn Storage, vault: Vault) -> StdResult<()> {
-    vault_store().save(store, vault.id.into(), &vault.into())
+pub fn migrate_bounty(store: &mut dyn Storage, bounty: Bounty) -> StdResult<()> {
+    bounty_store().save(store, bounty.id.into(), &bounty.into())
 }
 
-pub fn save_vault(store: &mut dyn Storage, vault_builder: VaultBuilder) -> StdResult<Vault> {
-    let vault = vault_builder.build(fetch_and_increment_counter(store, VAULT_COUNTER)?.into());
-    vault_store().save(store, vault.id.into(), &vault.clone().into())?;
-    Ok(vault)
+pub fn save_bounty(store: &mut dyn Storage, bounty_builder: BountyBuilder) -> StdResult<Bounty> {
+    let bounty = bounty_builder.build(fetch_and_increment_counter(store, BOUNTY_COUNTER)?.into());
+    bounty_store().save(store, bounty.id.into(), &bounty.clone().into())?;
+    Ok(bounty)
 }
 
 pub fn get_vault(store: &dyn Storage, vault_id: Uint128) -> StdResult<Vault> {
