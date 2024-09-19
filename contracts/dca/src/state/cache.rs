@@ -5,13 +5,13 @@ use std::collections::VecDeque;
 
 pub const BOUNTY_ID_CACHE: Item<Uint128> = Item::new("bounty_id_cache_v1");
 
-#[cw_serde]
-pub struct SwapCache {
-    pub swap_denom_balance: Coin,
-    pub receive_denom_balance: Coin,
-}
+// #[cw_serde]
+// pub struct SwapCache {
+  //  pub swap_denom_balance: Coin,
+  //  pub receive_denom_balance: Coin,
+// }
 
-pub const SWAP_CACHE: Item<SwapCache> = Item::new("swap_cache_v1");
+// pub const SWAP_CACHE: Item<SwapCache> = Item::new("swap_cache_v1");
 
 #[cw_serde]
 pub struct PostExecutionActionCacheEntry {
