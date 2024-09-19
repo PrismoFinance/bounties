@@ -20,7 +20,7 @@ struct BountyIndexes<'a> {
     pub owner_status: UniqueIndex<'a, (Addr, u8, u128), BountyData, u128>,
 }
 
-impl<'a> IndexList<VaultData> for BountyIndexes<'a> {
+impl<'a> IndexList<BountyData> for BountyIndexes<'a> {
     fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<BountyData>> + '_> {
         let v: Vec<&dyn Index<BountyData>> = vec![&self.owner, &self.owner_status];
         Box::new(v.into_iter())
@@ -48,24 +48,24 @@ pub fn save_bounty(store: &mut dyn Storage, bounty_builder: BountyBuilder) -> St
     Ok(bounty)
 }
 
-pub fn get_vault(store: &dyn Storage, vault_id: Uint128) -> StdResult<Vault> {
-    let vault_data = vault_store().load(store, vault_id.into())?;
-    vault_from(store, &vault_data)
+pub fn get_bounty(store: &dyn Storage, bounty_id: Uint128) -> StdResult<Bounty> {
+    let bounty_data = bounty_store().load(store, bounty_id.into())?;
+    bounty_from(store, &bounty_data)
 }
 
-pub fn get_vaults_by_address(
+pub fn get_bounties_by_address(
     store: &dyn Storage,
     address: Addr,
-    status: Option<VaultStatus>,
+    status: Option<BountyStatus>,
     start_after: Option<Uint128>,
     limit: Option<u16>,
-) -> StdResult<Vec<Vault>> {
+) -> StdResult<Vec<Bounty>> {
     let partition = match status {
-        Some(status) => vault_store()
+        Some(status) => bounty_store()
             .idx
             .owner_status
             .prefix((address, status as u8)),
-        None => vault_store().idx.owner.prefix(address),
+        None => bounty_store().idx.owner.prefix(address),
     };
 
     Ok(partition
@@ -76,18 +76,18 @@ pub fn get_vaults_by_address(
             cosmwasm_std::Order::Ascending,
         )
         .take(limit.unwrap_or_else(|| get_config(store).unwrap().default_page_limit) as usize)
-        .flat_map(|result| result.map(|(_, vault_data)| vault_from(store, &vault_data)))
+        .flat_map(|result| result.map(|(_, bounty_data)| bounty_from(store, &bounty_data)))
         .flatten()
-        .collect::<Vec<Vault>>())
+        .collect::<Vec<Bounty>>())
 }
 
-pub fn get_vaults(
+pub fn get_bounties(
     store: &dyn Storage,
     start_after: Option<Uint128>,
     limit: Option<u16>,
     reverse: Option<bool>,
-) -> StdResult<Vec<Vault>> {
-    Ok(vault_store()
+) -> StdResult<Vec<Bounty>> {
+    Ok(bounty_store()
         .range(
             store,
             start_after.map(Bound::exclusive),
@@ -98,24 +98,24 @@ pub fn get_vaults(
             }),
         )
         .take(limit.unwrap_or_else(|| get_config(store).unwrap().default_page_limit) as usize)
-        .flat_map(|result| result.map(|(_, vault_data)| vault_from(store, &vault_data)))
+        .flat_map(|result| result.map(|(_, bounty_data)| bounty_from(store, &bounty_data)))
         .flatten()
-        .collect::<Vec<Vault>>())
+        .collect::<Vec<Bounty>>())
 }
 
-pub fn update_vault(store: &mut dyn Storage, vault: Vault) -> StdResult<Vault> {
-    vault_store().save(store, vault.id.into(), &vault.clone().into())?;
-    Ok(vault)
+pub fn update_bounty(store: &mut dyn Storage, bounty: Bounty) -> StdResult<Bounty> {
+    bounty_store().save(store, bounty.id.into(), &bounty.clone().into())?;
+    Ok(bounty)
 }
 
 #[cw_serde]
-struct VaultData {
+struct BountyData {
     id: Uint128,
     created_at: Timestamp,
     owner: Addr,
     label: Option<String>,
     destinations: Vec<Destination>,
-    status: VaultStatus,
+    status: BountyStatus,
     balance: Coin,
     target_denom: String,
     swap_amount: Uint128,
@@ -129,42 +129,43 @@ struct VaultData {
     swapped_amount: Coin,
     received_amount: Coin,
     escrowed_amount: Coin,
-    performance_assessment_strategy: Option<PerformanceAssessmentStrategy>,
-    swap_adjustment_strategy: Option<SwapAdjustmentStrategy>,
+   // performance_assessment_strategy: Option<PerformanceAssessmentStrategy>,
+   // swap_adjustment_strategy: Option<SwapAdjustmentStrategy>,
 }
 
-impl From<Vault> for VaultData {
-    fn from(vault: Vault) -> Self {
+impl From<Bounty> for BountyData {
+    fn from(bounty: Bounty) -> Self {
         Self {
-            id: vault.id,
-            created_at: vault.created_at,
-            owner: vault.owner,
-            label: vault.label,
-            status: vault.status,
-            balance: vault.balance,
-            target_denom: vault.target_denom,
-            route: vault.route,
-            destinations: vault.destinations,
-            swap_amount: vault.swap_amount,
-            slippage_tolerance: vault.slippage_tolerance,
-            minimum_receive_amount: vault.minimum_receive_amount,
-            time_interval: vault.time_interval,
-            started_at: vault.started_at,
-            escrow_level: vault.escrow_level,
-            deposited_amount: vault.deposited_amount,
-            swapped_amount: vault.swapped_amount,
-            received_amount: vault.received_amount,
-            escrowed_amount: vault.escrowed_amount,
-            performance_assessment_strategy: vault.performance_assessment_strategy,
-            swap_adjustment_strategy: vault.swap_adjustment_strategy,
+            id: bounty.id,
+            created_at: bounty.created_at,
+            owner: bounty.owner,
+            label: bounty.label,
+            bount_description: bounty.bounty_description,
+            status: bounty.status,
+            balance: bounty.balance,
+            target_denom: bounty.target_denom,
+            route: bounty.route,
+            destinations: bounty.destinations,
+            swap_amount: bounty.swap_amount,
+            slippage_tolerance: bounty.slippage_tolerance,
+            minimum_receive_amount: bounty.minimum_receive_amount,
+            time_interval: bounty.time_interval,
+            started_at: bounty.started_at,
+            escrow_level: bounty.escrow_level,
+            deposited_amount: bounty.deposited_amount,
+           // swapped_amount: bounty.swapped_amount,
+            received_amount: bounty.received_amount,
+            escrowed_amount: bounty.escrowed_amount,
+           // performance_assessment_strategy: vault.performance_assessment_strategy,
+           // swap_adjustment_strategy: vault.swap_adjustment_strategy,
         }
     }
 }
 
-fn vault_from(store: &dyn Storage, data: &VaultData) -> StdResult<Vault> {
+fn bounty_from(store: &dyn Storage, data: &BountyData) -> StdResult<Bounty> {
     let trigger = get_trigger(store, data.id)?.map(|t| t.configuration);
 
-    Ok(Vault {
+    Ok(Bounty {
         id: data.id,
         created_at: data.created_at,
         owner: data.owner.clone(),
@@ -181,11 +182,11 @@ fn vault_from(store: &dyn Storage, data: &VaultData) -> StdResult<Vault> {
         started_at: data.started_at,
         escrow_level: data.escrow_level,
         deposited_amount: data.deposited_amount.clone(),
-        swapped_amount: data.swapped_amount.clone(),
+       // swapped_amount: data.swapped_amount.clone(),
         received_amount: data.received_amount.clone(),
         escrowed_amount: data.escrowed_amount.clone(),
-        performance_assessment_strategy: data.performance_assessment_strategy.clone(),
-        swap_adjustment_strategy: data.swap_adjustment_strategy.clone(),
+        //performance_assessment_strategy: data.performance_assessment_strategy.clone(),
+       // swap_adjustment_strategy: data.swap_adjustment_strategy.clone(),
         trigger,
     })
 }
