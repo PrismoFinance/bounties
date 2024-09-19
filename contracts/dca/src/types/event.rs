@@ -14,40 +14,40 @@ pub enum ExecutionSkippedReason {
 
 #[cw_serde]
 pub enum EventData {
-    DcaVaultFundsDeposited {
+    BountyFundsDeposited {
         amount: Coin,
     },
-    DcaVaultExecutionTriggered {
+    BountyExecutionTriggered {
         base_denom: String,
         quote_denom: String,
         asset_price: Decimal,
     },
-    DcaVaultExecutionCompleted {
+    BountyExecutionCompleted {
         sent: Coin,
         received: Coin,
         fee: Coin,
     },
-    SimulatedDcaVaultExecutionCompleted {
+    SimulatedBountyExecutionCompleted {
         sent: Coin,
         received: Coin,
         fee: Coin,
     },
-    DcaVaultExecutionSkipped {
+    BountyExecutionSkipped {
         reason: ExecutionSkippedReason,
     },
-    SimulatedDcaVaultExecutionSkipped {
+    SimulatedBountyExecutionSkipped {
         reason: ExecutionSkippedReason,
     },
-    DcaVaultCancelled {},
-    DcaVaultEscrowDisbursed {
+    BountyCancelled {},
+    BountyEscrowDisbursed {
         amount_disbursed: Coin,
         performance_fee: Coin,
     },
-    DcaVaultPostExecutionActionFailed {
+    BountyPostExecutionActionFailed {
         msg: SubMsg,
         funds: Vec<Coin>,
     },
-    DcaVaultUpdated {
+    BountyUpdated {
         updates: Vec<Update>,
     },
 }
