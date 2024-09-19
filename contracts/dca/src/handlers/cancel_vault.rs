@@ -1,13 +1,13 @@
 use crate::constants::FAIL_SILENTLY_REPLY_ID;
 use crate::error::ContractError;
 use crate::helpers::validation::{
-    assert_sender_is_admin_or_vault_owner, assert_vault_is_not_cancelled,
+    assert_sender_is_admin_or_bounty_owner, assert_bounty_is_not_cancelled,
 };
 use crate::state::config::get_config;
 use crate::state::disburse_escrow_tasks::save_disburse_escrow_task;
 use crate::state::events::create_event;
 use crate::state::triggers::delete_trigger;
-use crate::state::vaults::{get_vault, update_vault};
+use crate::state::bounties::{get_bounty, update_bounty};
 use crate::types::event::{EventBuilder, EventData};
 use crate::types::trigger::TriggerConfiguration;
 use crate::types::bounty::{Bounty, BountyStatus};
