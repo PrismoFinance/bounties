@@ -29,7 +29,7 @@ pub fn cancel_bounty_handler(
 
     create_event(
         deps.storage,
-        EventBuilder::new(bounty.id, env.block.clone(), EventData::DcaVaultCancelled {}),
+        EventBuilder::new(bounty.id, env.block.clone(), EventData::BountyCancelled {}),
     )?;
 
     if bounty.escrowed_amount.amount > Uint128::zero() {
@@ -66,7 +66,7 @@ pub fn cancel_bounty_handler(
                 contract_addr: config.exchange_contract_address.to_string(),
                 msg: to_json_binary(&ExecuteMsg::RetractOrder {
                     order_idx,
-                    denoms: vault.denoms(),
+                    denoms: bounty.denoms(),
                 })
                 .unwrap(),
                 funds: vec![],
@@ -79,7 +79,7 @@ pub fn cancel_bounty_handler(
                 contract_addr: config.exchange_contract_address.to_string(),
                 msg: to_json_binary(&ExecuteMsg::WithdrawOrder {
                     order_idx,
-                    denoms: vault.denoms(),
+                    denoms: bounty.denoms(),
                 })
                 .unwrap(),
                 funds: vec![],
@@ -88,13 +88,13 @@ pub fn cancel_bounty_handler(
         ));
     };
 
-    delete_trigger(deps.storage, vault.id)?;
+    delete_trigger(deps.storage, bounty.id)?;
 
     Ok(Response::new()
-        .add_attribute("cancel_vault", "true")
-        .add_attribute("vault_id", vault.id)
-        .add_attribute("owner", vault.owner)
-        .add_attribute("refunded_amount", vault.balance.to_string())
+        .add_attribute("cancel_bounty", "true")
+        .add_attribute("bounty_id", bounty.id)
+        .add_attribute("owner", bounty.owner)
+        .add_attribute("refunded_amount", bounty.balance.to_string())
         .add_submessages(submessages))
 }
 
@@ -103,9 +103,9 @@ mod cancel_bounty_tests {
     use super::*;
     use crate::constants::ONE;
     use crate::handlers::get_events_by_resource_id::get_events_by_resource_id_handler;
-    use crate::handlers::get_vault::get_vault_handler;
+    use crate::handlers::get_vault::get_bounty_handler;
     use crate::state::disburse_escrow_tasks::get_disburse_escrow_tasks;
-    use crate::tests::helpers::{instantiate_contract, setup_vault};
+    use crate::tests::helpers::{instantiate_contract, setup_bounty};
     use crate::tests::mocks::{calc_mock_dependencies, ADMIN, DENOM_UKUJI};
     use crate::types::event::{EventBuilder, EventData};
     use crate::types::bounty::{Bounty, BountyStatus};
@@ -166,7 +166,7 @@ mod cancel_bounty_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info.clone());
 
-        let bounty = setup_vault(deps.as_mut(), env.clone(), Bounty::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), Bounty::default());
 
         cancel_bounty_handler(deps.as_mut(), env.clone(), info, bounty.id).unwrap();
 
@@ -175,7 +175,7 @@ mod cancel_bounty_tests {
             .events;
 
         assert!(events.contains(
-            &EventBuilder::new(bounty.id, env.block, EventData::DcaVaultCancelled {}).build(1)
+            &EventBuilder::new(bounty.id, env.block, EventData::BountyCancelled {}).build(1)
         ));
     }
 
@@ -245,7 +245,7 @@ mod cancel_bounty_tests {
 
         instantiate_contract(deps.as_mut(), env.clone(), info);
 
-        let bounty = setup_vault(deps.as_mut(), env.clone(), bounty::default());
+        let bounty = setup_bounty(deps.as_mut(), env.clone(), bounty::default());
 
         let err = cancel_bounty_handler(
             deps.as_mut(),
