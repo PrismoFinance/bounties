@@ -86,7 +86,7 @@ pub fn deposit_handler(
         EventBuilder::new(
             bounty.id,
             env.block.clone(),
-            EventData::DcaVaultFundsDeposited {
+            EventData::BountyFundsDeposited {
                 amount: info.funds[0].clone(),
             },
         ),
@@ -183,7 +183,7 @@ mod deposit_tests {
             &EventBuilder::new(
                 bounty.id,
                 env.block,
-                EventData::DcaVaultFundsDeposited {
+                EventData::BountyFundsDeposited {
                     amount: deposit_amount,
                 },
             )
