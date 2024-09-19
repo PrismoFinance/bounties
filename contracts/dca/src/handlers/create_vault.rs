@@ -180,7 +180,7 @@ pub fn create_bounty_handler(
         EventBuilder::new(
             bounty.id,
             env.block.clone(),
-            EventData::DcaVaultFundsDeposited {
+            EventData::BountyFundsDeposited {
                 amount: Coin::new(
                     (info.funds[0].amount
                         - if target_receive_amount.is_some() {
@@ -317,7 +317,7 @@ mod create_bounty_tests {
     use crate::types::swap_adjustment_strategy::SwapAdjustmentStrategy;
     use crate::types::time_interval::TimeInterval;
     use crate::types::trigger::TriggerConfiguration;
-    use crate::types::vault::{Vault, VaultStatus};
+    use crate::types::vault::{Bounty, BountyStatus};
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{
         to_json_binary, Addr, Coin, ContractResult, Decimal, Decimal256, SubMsg, SystemResult,
@@ -1085,7 +1085,7 @@ mod create_bounty_tests {
             &EventBuilder::new(
                 Uint128::one(),
                 env.block,
-                EventData::DcaVaultFundsDeposited {
+                EventData::BountyFundsDeposited {
                     amount: info.funds[0].clone()
                 },
             )
@@ -1166,7 +1166,7 @@ mod create_bounty_tests {
             },
         ];
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1186,11 +1186,11 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
-        assert_eq!(vault.destinations, destinations);
+        assert_eq!(bounty.destinations, destinations);
     }
 
     #[test]
@@ -1203,7 +1203,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1223,12 +1223,12 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
         assert_eq!(
-            vault.swap_adjustment_strategy,
+            bounty.swap_adjustment_strategy,
             Some(SwapAdjustmentStrategy::default())
         );
     }
@@ -1243,7 +1243,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1267,11 +1267,11 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
-        assert_eq!(vault.performance_assessment_strategy, None);
+        assert_eq!(bounty.performance_assessment_strategy, None);
     }
 
     #[test]
@@ -1284,7 +1284,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1304,14 +1304,14 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
         assert_eq!(
-            vault.performance_assessment_strategy,
+            bounty.performance_assessment_strategy,
             Some(PerformanceAssessmentStrategy::CompareToStandardDca {
-                swapped_amount: Coin::new(0, vault.balance.denom),
+                swapped_amount: Coin::new(0, bounty.balance.denom),
                 received_amount: Coin::new(0, DENOM_UKUJI),
             })
         );
@@ -1327,7 +1327,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(1000000000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1347,12 +1347,12 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
         assert_eq!(
-            vault
+            bounty
                 .swap_adjustment_strategy
                 .map(|strategy| match strategy {
                     SwapAdjustmentStrategy::RiskWeightedAverage { model_id, .. } => model_id,
@@ -1372,7 +1372,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        let response = create_vault_handler(
+        let response = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1419,7 +1419,7 @@ mod create_bounty_tests {
         let swap_amount = ONE;
         info = mock_info(USER, &[Coin::new(TEN.into(), pair.denoms[1].clone())]);
 
-        let response = create_vault_handler(
+        let response = create_bounty_handler(
             deps.as_mut(),
             env,
             &info,
@@ -1468,7 +1468,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1488,14 +1488,14 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
             .vault;
 
         let config = get_config(deps.as_ref().storage).unwrap();
 
         assert_eq!(
-            vault.escrow_level,
+            bounty.escrow_level,
             config.risk_weighted_average_escrow_level
         );
     }
@@ -1510,7 +1510,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1530,11 +1530,11 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
-        assert_eq!(vault.escrow_level, Decimal::zero());
+        assert_eq!(bounty.escrow_level, Decimal::zero());
     }
 
     #[test]
@@ -1547,7 +1547,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        let err = create_vault_handler(
+        let err = create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1558,7 +1558,7 @@ mod create_bounty_tests {
                 allocation: Decimal::percent(100),
                 msg: Some(
                     to_json_binary(&ExecuteMsg::DisburseEscrow {
-                        vault_id: Uint128::one(),
+                        bounty_id: Uint128::one(),
                     })
                     .unwrap(),
                 ),
@@ -1592,7 +1592,7 @@ mod create_bounty_tests {
 
         info = mock_info(USER, &[Coin::new(100000, DENOM_UUSK)]);
 
-        create_vault_handler(
+        create_bounty_handler(
             deps.as_mut(),
             env.clone(),
             &info,
@@ -1604,7 +1604,7 @@ mod create_bounty_tests {
                 msg: Some(
                     to_json_binary(&ExecuteMsg::Deposit {
                         address: Addr::unchecked(USER),
-                        vault_id: Uint128::one(),
+                        bounty_id: Uint128::one(),
                     })
                     .unwrap(),
                 ),
@@ -1622,19 +1622,19 @@ mod create_bounty_tests {
         )
         .unwrap();
 
-        let vault = get_vault_handler(deps.as_ref(), Uint128::one())
+        let bounty = get_bounty_handler(deps.as_ref(), Uint128::one())
             .unwrap()
-            .vault;
+            .bounty;
 
         assert_eq!(
-            vault.destinations,
+            bounty.destinations,
             vec![Destination {
                 address: env.contract.address,
                 allocation: Decimal::percent(100),
                 msg: Some(
                     to_json_binary(&ExecuteMsg::Deposit {
                         address: Addr::unchecked(USER),
-                        vault_id: Uint128::one(),
+                        bounty_id: Uint128::one(),
                     })
                     .unwrap(),
                 ),
@@ -1647,7 +1647,7 @@ mod create_bounty_tests {
 mod save_limit_order_id_tests {
     use super::save_price_trigger;
     use crate::{
-        state::{cache::VAULT_ID_CACHE, triggers::get_trigger},
+        state::{cache::BOUNTY_ID_CACHE, triggers::get_trigger},
         types::trigger::{Trigger, TriggerConfiguration},
     };
     use cosmwasm_std::{
@@ -1658,11 +1658,11 @@ mod save_limit_order_id_tests {
     fn should_save_limit_order_id() {
         let mut deps = mock_dependencies();
 
-        let vault_id = Uint128::one();
+        let bounty_id = Uint128::one();
         let order_idx = Uint128::new(67);
 
-        VAULT_ID_CACHE
-            .save(deps.as_mut().storage, &vault_id)
+        BOUNTY_ID_CACHE
+            .save(deps.as_mut().storage, &bounty_id)
             .unwrap();
 
         let reply = Reply {
@@ -1677,12 +1677,12 @@ mod save_limit_order_id_tests {
 
         save_price_trigger(deps.as_mut(), reply).unwrap();
 
-        let trigger = get_trigger(deps.as_ref().storage, vault_id).unwrap();
+        let trigger = get_trigger(deps.as_ref().storage, bounty_id).unwrap();
 
         assert_eq!(
             trigger,
             Some(Trigger {
-                vault_id,
+                bounty_id,
                 configuration: TriggerConfiguration::Price {
                     target_price: Decimal::percent(200),
                     order_idx,
