@@ -7,7 +7,7 @@ use super::update::Update;
 pub enum ExecutionSkippedReason {
     SlippageToleranceExceeded,
     PriceThresholdExceeded { price: Decimal },
-    SwapAmountAdjustedToZero,
+   // SwapAmountAdjustedToZero,
     SlippageQueryError,
     UnknownError { msg: String },
 }
