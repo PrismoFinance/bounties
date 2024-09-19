@@ -7,11 +7,11 @@ use crate::helpers::validation::{
 use crate::helpers::vault::get_risk_weighted_average_model_id;
 use crate::state::events::create_event;
 use crate::state::triggers::save_trigger;
-use crate::state::vaults::{get_vault, update_vault};
+use crate::state::vaults::{get_bounty, update_bounty};
 use crate::types::event::{EventBuilder, EventData};
 use crate::types::swap_adjustment_strategy::SwapAdjustmentStrategy;
 use crate::types::trigger::{Trigger, TriggerConfiguration};
-use crate::types::vault::{Vault, VaultStatus};
+use crate::types::vault::{Bounty, BountyStatus};
 use cosmwasm_std::{Addr, Env};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{DepsMut, MessageInfo, Response, Uint128};
