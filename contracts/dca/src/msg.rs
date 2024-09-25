@@ -40,7 +40,7 @@ pub enum ExecuteMsg {
         label: Option<String>,
         bounty_description: Option<String>,
         destinations: Option<Vec<Destination>>, // Destination is in types and consists of allocation, address, and msg. 
-        // target_denom: String,
+        target_denom: String,
         route: Option<Binary>,
         slippage_tolerance: Option<Decimal>,
         // minimum_receive_amount: Option<Uint128>,
