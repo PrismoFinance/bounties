@@ -46,16 +46,16 @@ pub fn create_bounty_handler(
     target_denom: String,
     route: Option<Binary>,
     slippage_tolerance: Option<Decimal>,
-    minimum_receive_amount: Option<Uint128>,
-    time_interval: TimeInterval,
-    target_start_time_utc_seconds: Option<Uint64>,
-    target_receive_amount: Option<Uint128>,
+   // minimum_receive_amount: Option<Uint128>,
+   // time_interval: TimeInterval,
+   // target_start_time_utc_seconds: Option<Uint64>,
+   // target_receive_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     assert_contract_is_not_paused(deps.storage)?;
     assert_address_is_valid(deps.as_ref(), &owner, "owner")?;
     assert_exactly_one_asset(info.funds.clone())?;
     assert_destinations_limit_is_not_breached(&destinations)?;
-    assert_time_interval_is_valid(&time_interval)?;
+    // assert_time_interval_is_valid(&time_interval)?;
 
     assert_route_exists_for_denoms(
         deps.as_ref(),
@@ -64,29 +64,29 @@ pub fn create_bounty_handler(
         route.clone(),
     )?;
 
-    assert_swap_adjustment_and_performance_assessment_strategies_are_compatible(
-        &swap_adjustment_strategy_params,
-        &performance_assessment_strategy_params,
-    )?;
+   // assert_swap_adjustment_and_performance_assessment_strategies_are_compatible(
+    //    &swap_adjustment_strategy_params,
+     //   &performance_assessment_strategy_params,
+  //  )?;
 
     if let Some(label) = label.clone() {
         assert_label_is_no_longer_than_100_characters(&label)?;
     }
 
-    if let Some(swap_adjustment_strategy_params) = &swap_adjustment_strategy_params {
+  //  if let Some(swap_adjustment_strategy_params) = &swap_adjustment_strategy_params {
         assert_swap_adjustment_strategy_params_are_valid(swap_adjustment_strategy_params)?;
-    }
+   // }
 
     if let Some(slippage_tolerance) = slippage_tolerance {
         assert_slippage_tolerance_is_less_than_or_equal_to_one(slippage_tolerance)?;
     }
 
-    if let Some(target_time) = target_start_time_utc_seconds {
-        assert_target_start_time_is_not_in_the_past(
-            env.block.time,
-            Timestamp::from_seconds(target_time.u64()),
-        )?;
-    }
+   // if let Some(target_time) = target_start_time_utc_seconds {
+     //   assert_target_start_time_is_not_in_the_past(
+        //    env.block.time,
+         //   Timestamp::from_seconds(target_time.u64()),
+       // )?;
+   // }
 
     if destinations.is_empty() {
         destinations.push(Destination {
@@ -103,48 +103,48 @@ pub fn create_bounty_handler(
 
     let config = get_config(deps.storage)?;
 
-    let swap_denom = info.funds[0].denom.clone();
+   // let swap_denom = info.funds[0].denom.clone();
 
-    let swap_adjustment_strategy = match swap_adjustment_strategy_params {
-        Some(params) => Some(match params {
-            SwapAdjustmentStrategyParams::RiskWeightedAverage {
-                base_denom,
-                position_type,
-            } => SwapAdjustmentStrategy::RiskWeightedAverage {
-                model_id: get_risk_weighted_average_model_id(
-                    &env.block.time,
-                    &info.funds[0],
-                    &swap_amount,
-                    &time_interval,
-                ),
-                base_denom,
-                position_type,
-            },
-            SwapAdjustmentStrategyParams::WeightedScale {
-                base_receive_amount,
-                multiplier,
-                increase_only,
-            } => {
-                assert_weighted_scale_multiplier_is_no_more_than_10(multiplier)?;
-                SwapAdjustmentStrategy::WeightedScale {
-                    base_receive_amount,
-                    multiplier,
-                    increase_only,
-                }
-            }
-        }),
-        None => None,
-    };
+  //  let swap_adjustment_strategy = match swap_adjustment_strategy_params {
+    //    Some(params) => Some(match params {
+      //      SwapAdjustmentStrategyParams::RiskWeightedAverage {
+        //        base_denom,
+          //      position_type,
+           // } => SwapAdjustmentStrategy::RiskWeightedAverage {
+             //   model_id: get_risk_weighted_average_model_id(
+               //     &env.block.time,
+                 //   &info.funds[0],
+                   // &swap_amount,
+                   // &time_interval,
+               // ),
+               // base_denom,
+               // position_type,
+           // },
+          //  SwapAdjustmentStrategyParams::WeightedScale {
+            //    base_receive_amount,
+            //    multiplier,
+            //    increase_only,
+           // } => {
+             //   assert_weighted_scale_multiplier_is_no_more_than_10(multiplier)?;
+             //   SwapAdjustmentStrategy::WeightedScale {
+             //       base_receive_amount,
+             //       multiplier,
+             //       increase_only,
+             //   }
+           // }
+       // }),
+       // None => None,
+   // };
 
-    let performance_assessment_strategy = match performance_assessment_strategy_params {
-        Some(PerformanceAssessmentStrategyParams::CompareToStandardDca) => {
-            Some(PerformanceAssessmentStrategy::CompareToStandardDca {
-                swapped_amount: Coin::new(0, swap_denom.clone()),
-                received_amount: Coin::new(0, target_denom.clone()),
-            })
-        }
-        _ => None,
-    };
+    // let performance_assessment_strategy = match performance_assessment_strategy_params {
+       // Some(PerformanceAssessmentStrategyParams::CompareToStandardDca) => {
+         //   Some(PerformanceAssessmentStrategy::CompareToStandardDca {
+           //     swapped_amount: Coin::new(0, swap_denom.clone()),
+             //   received_amount: Coin::new(0, target_denom.clone()),
+           // })
+       // }
+       // _ => None,
+    // };
 
     let escrow_level = performance_assessment_strategy
         .clone()
@@ -161,10 +161,10 @@ pub fn create_bounty_handler(
         target_denom: target_denom.clone(),
         route,
         slippage_tolerance: slippage_tolerance.unwrap_or(config.default_slippage_tolerance),
-        minimum_receive_amount,
+       // minimum_receive_amount,
         balance: info.funds[0].clone(),
-        time_interval,
-        started_at: None,
+       // time_interval,
+       // started_at: None,
         escrow_level,
         deposited_amount: info.funds[0].clone(),
         received_amount: Coin::new(0, target_denom.clone()),
@@ -201,6 +201,9 @@ pub fn create_bounty_handler(
         .add_attribute("owner", bounty.owner.clone())
         .add_attribute("deposited_amount", bounty.balance.to_string());
 
+
+// Change target_start_time_utc_seconds to something else
+    
     match (target_start_time_utc_seconds, target_receive_amount) {
         (None, None) | (Some(_), None) => {
             save_trigger(
