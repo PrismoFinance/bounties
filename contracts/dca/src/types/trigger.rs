@@ -12,10 +12,14 @@ pub enum TriggerConfiguration {
         
         order_idx: Uint128,
     },
+    EscrowAccept {
+        target_time: Timestamp,
+        bounty_id: Uint128, 
+    },
 }
 
 #[cw_serde]
 pub struct Trigger {
-    pub vault_id: Uint128,
+    pub bounty_id: Uint128,
     pub configuration: TriggerConfiguration,
 }
