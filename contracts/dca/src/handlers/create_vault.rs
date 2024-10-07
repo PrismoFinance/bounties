@@ -42,20 +42,21 @@ pub fn create_bounty_handler(
     owner: Addr,
     label: Option<String>,
     bounty_description: Option<String>,
+    status: Option<BountyStatus>, 
     mut destinations: Vec<Destination>,
     target_denom: String,
     route: Option<Binary>,
     slippage_tolerance: Option<Decimal>,
    // minimum_receive_amount: Option<Uint128>,
-   // time_interval: TimeInterval,
-   // target_start_time_utc_seconds: Option<Uint64>,
+    time_interval: TimeInterval,
+    target_start_time_utc_seconds: Option<Uint64>,
    // target_receive_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     assert_contract_is_not_paused(deps.storage)?;
     assert_address_is_valid(deps.as_ref(), &owner, "owner")?;
     assert_exactly_one_asset(info.funds.clone())?;
     assert_destinations_limit_is_not_breached(&destinations)?;
-    // assert_time_interval_is_valid(&time_interval)?;
+    assert_time_interval_is_valid(&time_interval)?;
 
     assert_route_exists_for_denoms(
         deps.as_ref(),
@@ -74,19 +75,19 @@ pub fn create_bounty_handler(
     }
 
   //  if let Some(swap_adjustment_strategy_params) = &swap_adjustment_strategy_params {
-        assert_swap_adjustment_strategy_params_are_valid(swap_adjustment_strategy_params)?;
+      //  assert_swap_adjustment_strategy_params_are_valid(swap_adjustment_strategy_params)?;
    // }
 
     if let Some(slippage_tolerance) = slippage_tolerance {
         assert_slippage_tolerance_is_less_than_or_equal_to_one(slippage_tolerance)?;
     }
 
-   // if let Some(target_time) = target_start_time_utc_seconds {
-     //   assert_target_start_time_is_not_in_the_past(
-        //    env.block.time,
-         //   Timestamp::from_seconds(target_time.u64()),
-       // )?;
-   // }
+    if let Some(target_time) = target_start_time_utc_seconds {
+        assert_target_start_time_is_not_in_the_past(
+            env.block.time,
+            Timestamp::from_seconds(target_time.u64()),
+        )?;
+    }
 
     if destinations.is_empty() {
         destinations.push(Destination {
@@ -146,10 +147,10 @@ pub fn create_bounty_handler(
        // _ => None,
     // };
 
-    let escrow_level = performance_assessment_strategy
+    let escrow_level = bounty_assessment_strategy
         .clone()
         .map_or(Decimal::zero(), |_| {
-            config.risk_weighted_average_escrow_level
+            config.risk_weighted_average_escrow_level // What is this? 
         });
 
     let bounty_builder = BountyBuilder {
@@ -158,13 +159,14 @@ pub fn create_bounty_handler(
         destinations,
         created_at: env.block.time,
         status: BountyStatus::Scheduled,
+        bounty_description, 
         target_denom: target_denom.clone(),
         route,
         slippage_tolerance: slippage_tolerance.unwrap_or(config.default_slippage_tolerance),
        // minimum_receive_amount,
         balance: info.funds[0].clone(),
-       // time_interval,
-       // started_at: None,
+        time_interval,
+        started_at: None,
         escrow_level,
         deposited_amount: info.funds[0].clone(),
         received_amount: Coin::new(0, target_denom.clone()),
@@ -272,34 +274,34 @@ pub fn create_bounty_handler(
     }
 }
 
-pub fn save_price_trigger(deps: DepsMut, reply: Reply) -> Result<Response, ContractError> {
-    let submit_order_response = reply.result.into_result().unwrap();
+// pub fn save_price_trigger(deps: DepsMut, reply: Reply) -> Result<Response, ContractError> {
+   //  let submit_order_response = reply.result.into_result().unwrap();
 
-    let order_idx = get_attribute_in_event(&submit_order_response.events, "wasm", "order_idx")?
-        .parse::<Uint128>()
-        .expect("the order id of the submitted order");
+ //   let order_idx = get_attribute_in_event(&submit_order_response.events, "wasm", "order_idx")?
+   //     .parse::<Uint128>()
+     //   .expect("the order id of the submitted order");
 
-    let target_price =
-        get_attribute_in_event(&submit_order_response.events, "wasm", "target_price")?
-            .parse::<Decimal>()
-            .expect("the target price of the submitted order");
+   // let target_price =
+     //   get_attribute_in_event(&submit_order_response.events, "wasm", "target_price")?
+       //     .parse::<Decimal>()
+         //   .expect("the target price of the submitted order");
 
-    let bounty_id = BOUNTY_ID_CACHE.load(deps.storage)?;
+    //let bounty_id = BOUNTY_ID_CACHE.load(deps.storage)?;
 
-    save_trigger(
-        deps.storage,
-        Trigger {
-            vault_id,
-            configuration: TriggerConfiguration::Price {
-                order_idx,
-                target_price,
-            },
-        },
-    )?;
+    //save_trigger(
+      //  deps.storage,
+        //Trigger {
+          //  bounty_id,
+            //configuration: TriggerConfiguration::Price {
+             //   order_idx,
+               // target_price,
+           // },
+       // },
+   // )?;
 
-    Ok(Response::new()
-        .add_attribute("save_price_trigger", "true")
-        .add_attribute("order_idx", order_idx))
+   // Ok(Response::new()
+     //   .add_attribute("save_price_trigger", "true")
+     //   .add_attribute("order_idx", order_idx))
 }
 
 #[cfg(test)]
