@@ -6,8 +6,10 @@ pub enum TriggerConfiguration {
     Time {
         target_time: Timestamp,
     },
-    Price {
-        target_price: Decimal,
+    EscrowReject {
+        target_time: Timestamp,
+        bounty_id: Uint128,
+        
         order_idx: Uint128,
     },
 }
