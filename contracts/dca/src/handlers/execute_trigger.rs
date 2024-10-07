@@ -1,25 +1,31 @@
 use crate::constants::AFTER_SWAP_REPLY_ID;
 use crate::error::ContractError;
-use crate::helpers::price::{get_expected_receive_amount, get_slippage, get_twap_to_now};
+// use crate::helpers::price::{get_expected_receive_amount, get_slippage, get_twap_to_now};
 use crate::helpers::time::get_next_target_time;
 use crate::helpers::validation::{assert_contract_is_not_paused, assert_target_time_is_in_past};
-use crate::helpers::vault::{get_swap_amount, simulate_standard_dca_execution};
+// use crate::helpers::vault::{get_swap_amount, simulate_standard_dca_execution};
 use crate::msg::ExecuteMsg;
-use crate::state::cache::{SwapCache, SWAP_CACHE, VAULT_ID_CACHE};
+use crate::state::cache::{SwapCache, SWAP_CACHE, BOUNTY_ID_CACHE};
 use crate::state::config::get_config;
 use crate::state::events::create_event;
 use crate::state::triggers::{delete_trigger, save_trigger};
-use crate::state::vaults::{get_vault, update_vault};
+use crate::state::vaults::{get_bounty, update_bounty};
 use crate::types::event::{EventBuilder, EventData, ExecutionSkippedReason};
-use crate::types::swap_adjustment_strategy::SwapAdjustmentStrategy;
+// use crate::types::swap_adjustment_strategy::SwapAdjustmentStrategy;
 use crate::types::trigger::{Trigger, TriggerConfiguration};
-use crate::types::vault::{Vault, VaultStatus};
+use crate::types::vault::{Bounty, BountyStatus};
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, SubMsg, WasmMsg};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{DepsMut, Env, Response, Uint128};
 use exchange::msg::{ExecuteMsg as ExchangeExecuteMsg, Order, QueryMsg as ExchangeQueryMsg};
 use shared::balance::query_balance;
 use shared::cw20::into_execute_msg;
+
+// We want a few triggers. 
+// 1) Escrow Trigger --> a. Rejected Bounty --> Trigger Rejection and refund the Bounty Issuer. b.Completed Bounty --> Trigger Completion and send pay to Bounty Assignee
+// 2) Time Trigger --> Set time for the bounty to be completed. If time elapses then the bounty is no longer active and it is treated like an Escrow Rejected Bounty. (e.g. Funds are sent back to the Bounty Issuer)
+// If a Time Trigger is activated, then the bounty is no longer available and a new bounty needs created. 
+
 
 pub fn execute_trigger_handler(
     deps: DepsMut,
@@ -29,34 +35,35 @@ pub fn execute_trigger_handler(
 ) -> Result<Response, ContractError> {
     assert_contract_is_not_paused(deps.storage)?;
 
-    let mut vault = get_vault(deps.storage, trigger_id)?;
+    let mut bounty = get_bounty(deps.storage, trigger_id)?;
 
     let mut response = Response::new()
         .add_attribute("execute_trigger", "true")
-        .add_attribute("vault_id", vault.id)
-        .add_attribute("owner", vault.owner.clone());
+        .add_attribute("bounty_id", bounty.id)
+        .add_attribute("owner", bounty.owner.clone());
 
-    delete_trigger(deps.storage, vault.id)?;
+    delete_trigger(deps.storage, bounty.id)?;
 
-    if vault.is_cancelled() {
+    if bounty.is_cancelled() {
         return Err(ContractError::CustomError {
             val: format!(
-                "vault with id {} is cancelled, and is not available for execution",
-                vault.id
+                "bounty with id {} is cancelled, and is not available for execution",
+                bounty.id
             ),
         });
     }
 
-    if vault.trigger.is_none() {
+    // If there is no trigger then the bounty is not valid. We need to have a way for a trigger to be set on creation and then they can update the trigger if it changes.
+    if bounty.trigger.is_none() {
         return Err(ContractError::CustomError {
             val: format!(
-                "vault with id {} has no trigger attached, and is not available for execution",
-                vault.id
+                "Bounty with id {} has no trigger attached, and is not available for execution",
+                bounty.id
             ),
         });
     }
 
-    match vault.trigger {
+    match bounty.trigger {
         Some(TriggerConfiguration::Time { target_time }) => {
             assert_target_time_is_in_past(env.block.time, target_time)?;
         }
